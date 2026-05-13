@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@300;400;500;600;700;800;900&family=Epilogue:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 45 14% 96%;
+    --foreground: 0 0% 7%;
+    --surface: 0 0% 100%;
+    --clay: 36 34% 58%;
+    --ink: 0 0% 7%;
+    --muted: 36 21% 93%;
+    --muted-foreground: 0 0% 42%;
+    --border: 0 0% 0% / 0.08;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+  }
+
+  * { @apply border-border; }
+  html, body, #root { height: 100%; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Epilogue', system-ui, sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6, .font-display {
+    font-family: 'Urbanist', system-ui, sans-serif;
+    letter-spacing: -0.01em;
+    font-weight: 500;
+  }
+}
