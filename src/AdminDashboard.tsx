@@ -3,9 +3,9 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  BarChart3, Users, Mail, Download, Settings, Layout, ChevronLeft, ChevronRight,
+  BarChart3, Users, Mail, Download, Settings, ChevronLeft, ChevronRight,
   Search, Trash2, CheckSquare, Square, Send, X, DollarSign, Home, Wrench,
-  TrendingUp, Calendar, Eye, Image, RefreshCw, ExternalLink
+  TrendingUp, Calendar, Eye, RefreshCw, ExternalLink
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -50,7 +50,7 @@ const DEFAULT_PRICING: PricingConfig = {
   addon_costs: { solar: 12500, carport: 8500, water_tank: 4200, smart_home: 15800, fence: 15000, landscaping: 10000 },
 };
 
-type Tab = 'dashboard' | 'leads' | 'pricing' | 'layouts';
+type Tab = 'dashboard' | 'leads' | 'pricing';
 
 const BREVO_API_KEY = import.meta.env.VITE_BREVO_API_KEY;
 const BREVO_SENDER_EMAIL = import.meta.env.VITE_BREVO_SENDER_EMAIL;
@@ -68,8 +68,6 @@ const AdminDashboard = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [pricing, setPricing] = useState<PricingConfig>(DEFAULT_PRICING);
-  const [presets, setPresets] = useState<any[]>([]);
-  const [elevationImages, setElevationImages] = useState<any[]>([]);
 
   const fetchLeads = useCallback(async () => {
     const { data, error } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
@@ -82,24 +80,14 @@ const AdminDashboard = () => {
     if (!error && data?.value) setPricing({ ...DEFAULT_PRICING, ...(data.value as any) });
   }, []);
 
-  const fetchPresets = useCallback(async () => {
-    const { data, error } = await supabase.from('presets').select('*').order('created_at', { ascending: false });
-    if (!error && data) setPresets(data);
-  }, []);
-
-  const fetchElevationImages = useCallback(async () => {
-    const { data, error } = await supabase.from('elevation_images').select('*').order('created_at', { ascending: false });
-    if (!error && data) setElevationImages(data);
-  }, []);
-
   useEffect(() => {
     const loadAll = async () => {
       setLoading(true);
-      await Promise.all([fetchLeads(), fetchPricing(), fetchPresets(), fetchElevationImages()]);
+      await Promise.all([fetchLeads(), fetchPricing()]);
       setLoading(false);
     };
     loadAll();
-  }, [fetchLeads, fetchPricing, fetchPresets, fetchElevationImages]);
+  }, [fetchLeads, fetchPricing]);
 
   useEffect(() => { document.title = 'GBTI Admin · Dashboard'; }, []);
 
@@ -107,7 +95,6 @@ const AdminDashboard = () => {
     { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 size={18} /> },
     { id: 'leads', label: 'Leads', icon: <Users size={18} /> },
     { id: 'pricing', label: 'Pricing', icon: <DollarSign size={18} /> },
-    { id: 'layouts', label: 'Layouts', icon: <Layout size={18} /> },
   ];
 
   return (
@@ -171,7 +158,6 @@ const AdminDashboard = () => {
             {activeTab === 'dashboard' && <DashboardTab key="d" leads={leads} />}
             {activeTab === 'leads' && <LeadsTab key="l" leads={leads} onRefresh={fetchLeads} />}
             {activeTab === 'pricing' && <PricingTab key="p" pricing={pricing} onSave={setPricing} />}
-            {activeTab === 'layouts' && <LayoutsTab key="la" presets={presets} elevationImages={elevationImages} onRefresh={() => { fetchPresets(); fetchElevationImages(); }} />}
           </AnimatePresence>
         )}
       </motion.main>
@@ -542,83 +528,5 @@ const PriceInput = ({ label, value, onChange, prefix }: { label: string; value: 
     </div>
   </div>
 );
-
-// ─── Layouts Tab ─────────────────────────────────────────────────────────────
-
-const LayoutsTab = ({ presets, elevationImages, onRefresh }: { presets: any[]; elevationImages: any[]; onRefresh: () => void }) => {
-  const deletePreset = async (id: string) => {
-    if (!confirm('Delete this preset permanently?')) return;
-    const { error } = await supabase.from('presets').delete().eq('id', id);
-    if (error) toast.error('Failed to delete preset'); else { toast.success('Preset deleted'); onRefresh(); }
-  };
-
-  const deleteElevation = async (id: string) => {
-    if (!confirm('Delete this elevation image?')) return;
-    const { error } = await supabase.from('elevation_images').delete().eq('id', id);
-    if (error) toast.error('Failed to delete'); else { toast.success('Elevation image deleted'); onRefresh(); }
-  };
-
-  const uploadElevation = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const presetKey = prompt('Enter the preset key for this elevation image:', '');
-    if (!presetKey?.trim()) return;
-    const filePath = `elevations/${Date.now()}_${file.name}`;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
-      const { error } = await supabase.from('elevation_images').insert({ preset_key: presetKey.trim(), image_path: filePath, image_url: dataUrl });
-      if (error) toast.error('Failed to save'); else { toast.success('Elevation image uploaded'); onRefresh(); }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  return (
-    <TabWrapper title="Layouts & Elevations" subtitle={`${presets.length} presets · ${elevationImages.length} elevation images`}
-      actions={<div className="flex items-center gap-2">
-        <button onClick={onRefresh} className="p-2.5 rounded-xl border border-border bg-surface hover:bg-muted/30 transition-colors" title="Refresh"><RefreshCw size={14} /></button>
-        <label className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-clay text-white text-sm font-medium hover:brightness-110 transition-all cursor-pointer">
-          <Image size={14} /> Upload Elevation<input type="file" accept="image/*" onChange={uploadElevation} className="hidden" />
-        </label>
-      </div>}>
-
-      <div className="mb-8">
-        <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60 mb-4">Saved Presets</h3>
-        {presets.length === 0 ? <div className="rounded-2xl border border-border bg-surface p-8 text-center text-sm text-muted-foreground/50">No presets saved yet</div> : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {presets.map((p) => (
-              <div key={p.id} className="rounded-2xl border border-border bg-surface p-5 group hover:border-clay/30 transition-colors">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1 min-w-0"><div className="font-medium text-sm truncate">{p.name}</div><div className="text-xs text-muted-foreground/50 mt-0.5">{new Date(p.created_at).toLocaleDateString()}</div></div>
-                  <button onClick={() => deletePreset(p.id)} className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-muted-foreground/50 hover:text-destructive transition-all"><Trash2 size={14} /></button>
-                </div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-clay/60">{p.plan_data?.ground?.rooms?.length || 0} rooms</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div>
-        <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60 mb-4">Elevation Images</h3>
-        {elevationImages.length === 0 ? <div className="rounded-2xl border border-border bg-surface p-8 text-center text-sm text-muted-foreground/50">No elevation images uploaded yet</div> : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {elevationImages.map((img) => (
-              <div key={img.id} className="rounded-2xl border border-border bg-surface overflow-hidden group hover:border-clay/30 transition-colors">
-                <div className="h-40 bg-muted/20 overflow-hidden">
-                  <img src={img.image_url} alt={img.preset_key} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onError={(e) => { (e.target as HTMLImageElement).alt = 'Image not found'; }} />
-                </div>
-                <div className="p-4"><div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0"><div className="text-xs text-muted-foreground/60 truncate" title={img.preset_key}>{img.preset_key}</div><div className="text-[10px] text-muted-foreground/40 mt-0.5">{new Date(img.created_at).toLocaleDateString()}</div></div>
-                  <button onClick={() => deleteElevation(img.id)} className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-muted-foreground/50 hover:text-destructive transition-all"><Trash2 size={14} /></button>
-                </div></div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </TabWrapper>
-  );
-};
 
 export default AdminDashboard;
