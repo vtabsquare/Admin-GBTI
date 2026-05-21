@@ -3,41 +3,112 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
-import { LogIn, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { LogIn, Mail, Send, ArrowLeft, ShieldCheck } from 'lucide-react';
 
-interface LoginPageProps {
-  onForgotPassword: () => void;
-}
+const BREVO_API_KEY = import.meta.env.VITE_BREVO_API_KEY;
+const BREVO_SENDER_EMAIL = import.meta.env.VITE_BREVO_SENDER_EMAIL;
+const BREVO_SENDER_NAME = import.meta.env.VITE_BREVO_SENDER_NAME || 'GBTI Architectural Team';
 
-const LoginPage = ({ onForgotPassword }: LoginPageProps) => {
+const LoginPage = () => {
   const { login } = useAuth();
+  const [step, setStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const sendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim()) {
-      toast.error('Please enter your email and password');
+    if (!email.trim()) {
+      toast.error('Please enter your email address');
       return;
     }
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('verify_admin_login', {
+      const { data, error } = await supabase.rpc('send_admin_login_otp', {
         p_email: email.trim(),
-        p_password: password,
       });
 
       if (error) {
-        toast.error('Login failed: ' + error.message);
+        toast.error('Failed to send OTP: ' + error.message);
         setLoading(false);
         return;
       }
 
       if (!data) {
-        toast.error('Invalid email or password');
+        toast.error('This email is not registered as an admin');
+        setLoading(false);
+        return;
+      }
+
+      // Send OTP via Brevo
+      if (BREVO_API_KEY && BREVO_SENDER_EMAIL) {
+        try {
+          await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+              accept: 'application/json',
+              'api-key': BREVO_API_KEY,
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+              sender: { email: BREVO_SENDER_EMAIL, name: BREVO_SENDER_NAME },
+              to: [{ email: email.trim() }],
+              replyTo: { email: BREVO_SENDER_EMAIL, name: BREVO_SENDER_NAME },
+              subject: 'GBTI Admin — Login OTP',
+              htmlContent: `
+                <div style="font-family:Arial,sans-serif;color:#111;line-height:1.6;max-width:560px;margin:0 auto;padding:32px;">
+                  <div style="text-align:center;margin-bottom:24px;">
+                    <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#b8956a,#a07850);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:20px;">G</div>
+                  </div>
+                  <h2 style="text-align:center;margin:0 0 8px;color:#111;font-size:20px;">Admin Login OTP</h2>
+                  <p style="text-align:center;color:#6b7280;margin:0 0 24px;font-size:14px;">Use the code below to sign in to your GBTI Admin Panel</p>
+                  <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:20px;text-align:center;margin:0 0 24px;">
+                    <span style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#111;">${data}</span>
+                  </div>
+                  <p style="text-align:center;color:#9ca3af;font-size:12px;margin:0;">This code expires in 10 minutes. If you did not request this, please ignore this email.</p>
+                  <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;"/>
+                  <p style="text-align:center;font-size:11px;color:#9ca3af;">GBTI Architectural Team</p>
+                </div>
+              `,
+              textContent: `Your GBTI Admin login OTP is: ${data}\n\nThis code expires in 10 minutes.\nIf you did not request this, please ignore this email.\n\n-- GBTI Architectural Team`,
+            }),
+          });
+        } catch {
+          console.error('Brevo email send failed');
+        }
+      }
+
+      toast.success('OTP sent! Check your email.');
+      setStep(2);
+    } catch {
+      toast.error('Something went wrong. Please try again.');
+    }
+    setLoading(false);
+  };
+
+  const verifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otp.trim() || otp.length !== 6) {
+      toast.error('Please enter the 6-digit OTP');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('verify_admin_login_otp', {
+        p_email: email.trim(),
+        p_otp: otp.trim(),
+      });
+
+      if (error) {
+        toast.error('Verification failed: ' + error.message);
+        setLoading(false);
+        return;
+      }
+
+      if (!data) {
+        toast.error('Invalid or expired OTP. Please try again.');
         setLoading(false);
         return;
       }
@@ -46,7 +117,7 @@ const LoginPage = ({ onForgotPassword }: LoginPageProps) => {
         id: data.id,
         email: data.email,
         display_name: data.display_name,
-        must_change_password: data.must_change_password,
+        must_change_password: false,
       });
       toast.success('Welcome back!');
     } catch {
@@ -100,7 +171,7 @@ const LoginPage = ({ onForgotPassword }: LoginPageProps) => {
             transition={{ delay: 0.3, duration: 0.5 }}
             className="text-white/40 text-sm mt-1"
           >
-            Sign in to your account
+            {step === 1 ? 'Enter your email to receive a login OTP' : 'Enter the OTP sent to your email'}
           </motion.p>
         </div>
 
@@ -111,84 +182,115 @@ const LoginPage = ({ onForgotPassword }: LoginPageProps) => {
           transition={{ delay: 0.25, duration: 0.5 }}
           className="bg-surface/[0.03] backdrop-blur-2xl border border-white/[0.08] rounded-2xl p-8 shadow-2xl"
         >
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email */}
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 mb-2 block">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/25" />
+          {step === 1 ? (
+            <form onSubmit={sendOtp} className="space-y-5">
+              {/* Email */}
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 mb-2 block">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/25" />
+                  <input
+                    id="login-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white text-sm placeholder:text-white/20 outline-none focus:border-clay/50 focus:bg-white/[0.08] transition-all duration-300"
+                  />
+                </div>
+              </div>
+
+              {/* Send OTP Button */}
+              <button
+                id="send-otp-submit"
+                type="submit"
+                disabled={loading || !email.trim()}
+                className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl bg-gradient-to-r from-clay to-clay/90 text-white text-sm font-semibold hover:brightness-110 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-clay/20"
+              >
+                {loading ? (
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, ease: 'linear', duration: 1 }}
+                    className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full"
+                  />
+                ) : (
+                  <>
+                    <Send size={16} />
+                    Send OTP
+                  </>
+                )}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={verifyOtp} className="space-y-5">
+              {/* Email display */}
+              <div className="bg-white/[0.04] rounded-lg px-4 py-3 flex items-center gap-3">
+                <Mail size={14} className="text-white/30 flex-shrink-0" />
+                <span className="text-white/60 text-sm truncate">{email}</span>
+              </div>
+
+              {/* OTP Input */}
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 mb-2 block">
+                  6-Digit OTP
+                </label>
                 <input
-                  id="login-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white text-sm placeholder:text-white/20 outline-none focus:border-clay/50 focus:bg-white/[0.08] transition-all duration-300"
+                  id="login-otp"
+                  type="text"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  maxLength={6}
+                  autoFocus
+                  className="w-full text-center text-2xl font-display font-bold tracking-[0.5em] px-4 py-4 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white placeholder:text-white/15 outline-none focus:border-clay/50 focus:bg-white/[0.08] transition-all duration-300"
                 />
               </div>
-            </div>
 
-            {/* Password */}
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 mb-2 block">
-                Password
-              </label>
-              <div className="relative">
-                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/25" />
-                <input
-                  id="login-password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  autoComplete="current-password"
-                  className="w-full pl-11 pr-12 py-3.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white text-sm placeholder:text-white/20 outline-none focus:border-clay/50 focus:bg-white/[0.08] transition-all duration-300"
-                />
+              {/* Verify Button */}
+              <button
+                id="verify-otp-submit"
+                type="submit"
+                disabled={loading || otp.length !== 6}
+                className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl bg-gradient-to-r from-clay to-clay/90 text-white text-sm font-semibold hover:brightness-110 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-clay/20"
+              >
+                {loading ? (
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, ease: 'linear', duration: 1 }}
+                    className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full"
+                  />
+                ) : (
+                  <>
+                    <ShieldCheck size={16} />
+                    Verify & Sign In
+                  </>
+                )}
+              </button>
+
+              {/* Resend / Go back */}
+              <div className="flex items-center justify-between pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/50 transition-colors"
+                  onClick={() => { setStep(1); setOtp(''); }}
+                  className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/50 transition-colors"
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  <ArrowLeft size={12} />
+                  Change email
+                </button>
+                <button
+                  type="button"
+                  onClick={sendOtp as any}
+                  disabled={loading}
+                  className="text-xs text-clay/70 hover:text-clay transition-colors disabled:opacity-50"
+                >
+                  Resend OTP
                 </button>
               </div>
-            </div>
-
-            {/* Forgot Password Link */}
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={onForgotPassword}
-                className="text-xs text-clay/80 hover:text-clay transition-colors font-medium"
-              >
-                Forgot Password?
-              </button>
-            </div>
-
-            {/* Submit */}
-            <button
-              id="login-submit"
-              type="submit"
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl bg-gradient-to-r from-clay to-clay/90 text-white text-sm font-semibold hover:brightness-110 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-clay/20"
-            >
-              {loading ? (
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, ease: 'linear', duration: 1 }}
-                  className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full"
-                />
-              ) : (
-                <>
-                  <LogIn size={16} />
-                  Sign In
-                </>
-              )}
-            </button>
-          </form>
+            </form>
+          )}
         </motion.div>
 
         {/* Footer */}

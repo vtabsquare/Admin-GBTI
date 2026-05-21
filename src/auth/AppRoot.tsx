@@ -1,14 +1,10 @@
-import { useState } from 'react';
 import { useAuth } from './AuthContext';
 import LoginPage from './LoginPage';
-import ChangePasswordPage from './ChangePasswordPage';
-import ForgotPasswordPage from './ForgotPasswordPage';
 import AdminDashboard from '@/AdminDashboard';
 import { motion } from 'framer-motion';
 
 const AppRoot = () => {
   const { user, loading } = useAuth();
-  const [authView, setAuthView] = useState<'login' | 'forgot-password'>('login');
 
   // Loading spinner while restoring session
   if (loading) {
@@ -23,17 +19,9 @@ const AppRoot = () => {
     );
   }
 
-  // Not authenticated → show login or forgot password
+  // Not authenticated → show OTP login
   if (!user) {
-    if (authView === 'forgot-password') {
-      return <ForgotPasswordPage onBack={() => setAuthView('login')} />;
-    }
-    return <LoginPage onForgotPassword={() => setAuthView('forgot-password')} />;
-  }
-
-  // Authenticated but must change password
-  if (user.must_change_password) {
-    return <ChangePasswordPage />;
+    return <LoginPage />;
   }
 
   // Fully authenticated → show dashboard

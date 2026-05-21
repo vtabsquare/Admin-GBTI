@@ -16,29 +16,13 @@ interface AdminUserRow {
   created_at: string;
 }
 
-function generateTempPassword(length = 12): string {
-  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const lower = 'abcdefghjkmnpqrstuvwxyz';
-  const digits = '23456789';
-  const symbols = '!@#$&*';
-  const all = upper + lower + digits + symbols;
-
-  // Ensure at least one of each category
-  let pw =
-    upper[Math.floor(Math.random() * upper.length)] +
-    lower[Math.floor(Math.random() * lower.length)] +
-    digits[Math.floor(Math.random() * digits.length)] +
-    symbols[Math.floor(Math.random() * symbols.length)];
-
-  for (let i = pw.length; i < length; i++) {
-    pw += all[Math.floor(Math.random() * all.length)];
+function generateRandomPassword(length = 16): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$&*';
+  let pw = '';
+  for (let i = 0; i < length; i++) {
+    pw += chars[Math.floor(Math.random() * chars.length)];
   }
-
-  // Shuffle
-  return pw
-    .split('')
-    .sort(() => Math.random() - 0.5)
-    .join('');
+  return pw;
 }
 
 const UsersTab = () => {
@@ -65,9 +49,9 @@ const UsersTab = () => {
     fetchUsers();
   }, [fetchUsers]);
 
-  const sendTempPasswordEmail = async (email: string, displayName: string, tempPassword: string) => {
+  const sendWelcomeEmail = async (email: string, displayName: string) => {
     if (!BREVO_API_KEY || !BREVO_SENDER_EMAIL) {
-      toast.warning('Brevo is not configured — temporary password could not be emailed. Password: ' + tempPassword);
+      toast.warning('Brevo is not configured — welcome email could not be sent.');
       return;
     }
 
@@ -93,13 +77,11 @@ const UsersTab = () => {
               </div>
               <h2 style="text-align:center;margin:0 0 8px;color:#111;font-size:20px;">Welcome to GBTI Admin</h2>
               <p style="text-align:center;color:#6b7280;margin:0 0 24px;font-size:14px;">An admin account has been created for you</p>
-              <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin:0 0 24px;">
-                <table style="width:100%;font-size:14px;">
-                  <tr><td style="padding:6px 0;color:#6b7280;width:120px;">Email</td><td style="padding:6px 0;font-weight:600;">${email}</td></tr>
-                  <tr><td style="padding:6px 0;color:#6b7280;">Temp Password</td><td style="padding:6px 0;font-weight:600;font-family:monospace;font-size:15px;letter-spacing:1px;">${tempPassword}</td></tr>
-                </table>
+              <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:20px;text-align:center;margin:0 0 24px;">
+                <p style="margin:0 0 8px;color:#6b7280;font-size:13px;">Your login email</p>
+                <p style="margin:0;font-weight:700;font-size:16px;color:#111;">${email}</p>
               </div>
-              <p style="text-align:center;color:#6b7280;font-size:13px;margin:0 0 16px;">Please log in and change your password immediately.</p>
+              <p style="text-align:center;color:#6b7280;font-size:13px;margin:0 0 16px;">To sign in, visit the Admin Panel and enter your email. A one-time login code (OTP) will be sent to this email address each time you log in.</p>
               <div style="text-align:center;margin:0 0 24px;">
                 <a href="${adminUrl}" style="display:inline-block;background:linear-gradient(135deg,#b8956a,#a07850);color:#fff;text-decoration:none;padding:12px 32px;border-radius:10px;font-weight:600;font-size:14px;">Open Admin Panel</a>
               </div>
@@ -107,15 +89,15 @@ const UsersTab = () => {
               <p style="text-align:center;font-size:11px;color:#9ca3af;">GBTI Architectural Team</p>
             </div>
           `,
-          textContent: `Welcome to GBTI Admin!\n\nAn admin account has been created for you.\n\nEmail: ${email}\nTemporary Password: ${tempPassword}\n\nPlease log in at ${adminUrl} and change your password immediately.\n\n-- GBTI Architectural Team`,
+          textContent: `Welcome to GBTI Admin!\n\nAn admin account has been created for you.\n\nYour login email: ${email}\n\nTo sign in, visit ${adminUrl} and enter your email. A one-time login code (OTP) will be sent each time you log in.\n\n-- GBTI Architectural Team`,
         }),
       });
 
       if (!res.ok) {
-        toast.warning('Email sending failed. Temp password: ' + tempPassword);
+        toast.warning('Welcome email could not be sent.');
       }
     } catch {
-      toast.warning('Email sending failed. Temp password: ' + tempPassword);
+      toast.warning('Welcome email could not be sent.');
     }
   };
 
@@ -126,13 +108,14 @@ const UsersTab = () => {
     }
 
     setAdding(true);
-    const tempPassword = generateTempPassword();
+    // A random password is stored in DB but never used — login is OTP-based
+    const randomPassword = generateRandomPassword();
 
     try {
       const { data, error } = await supabase.rpc('create_admin_user', {
         p_email: newEmail.trim(),
         p_display_name: newDisplayName.trim() || newEmail.trim().split('@')[0],
-        p_password: tempPassword,
+        p_password: randomPassword,
       });
 
       if (error) {
@@ -142,12 +125,8 @@ const UsersTab = () => {
       }
 
       if (data) {
-        await sendTempPasswordEmail(
-          data.email,
-          data.display_name,
-          tempPassword
-        );
-        toast.success(`User created! Temporary password sent to ${data.email}`);
+        await sendWelcomeEmail(data.email, data.display_name);
+        toast.success(`User created! Welcome email sent to ${data.email}`);
         setShowAddModal(false);
         setNewEmail('');
         setNewDisplayName('');
@@ -316,7 +295,7 @@ const UsersTab = () => {
               </div>
 
               <p className="text-sm text-muted-foreground mb-5">
-                A temporary password will be generated and sent to the user's email. They'll be asked to change it on first login.
+                The user will receive a welcome email with login instructions. They'll sign in using their email and a one-time OTP code.
               </p>
 
               <div className="space-y-4">
