@@ -5,9 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   BarChart3, Users, Mail, Download, Settings, ChevronLeft, ChevronRight,
   Search, Trash2, CheckSquare, Square, Send, X, DollarSign, Home, Wrench,
-  TrendingUp, Calendar, Eye, RefreshCw, ExternalLink
+  TrendingUp, Calendar, Eye, RefreshCw, ExternalLink, LogOut, UserCog
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { useAuth } from '@/auth/AuthContext';
+import UsersTab from '@/auth/UsersTab';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -32,7 +34,7 @@ interface PricingConfig {
     family: { baseCost: number; baseArea: number };
     premium: { baseCost: number; baseArea: number };
   };
-  kitchen_costs: { standard: number; open: number; galley: number };
+  kitchen_costs: { standard: number; open: number };
   addon_costs: {
     solar: number; carport: number; water_tank: number;
     smart_home: number; fence: number; landscaping: number;
@@ -46,11 +48,11 @@ const DEFAULT_PRICING: PricingConfig = {
     family: { baseCost: 245000, baseArea: 1400 },
     premium: { baseCost: 410000, baseArea: 2100 },
   },
-  kitchen_costs: { standard: 8000, open: 14000, galley: 6500 },
+  kitchen_costs: { standard: 8000, open: 14000 },
   addon_costs: { solar: 12500, carport: 8500, water_tank: 4200, smart_home: 15800, fence: 15000, landscaping: 10000 },
 };
 
-type Tab = 'dashboard' | 'leads' | 'pricing';
+type Tab = 'dashboard' | 'leads' | 'pricing' | 'users';
 
 const BREVO_API_KEY = import.meta.env.VITE_BREVO_API_KEY;
 const BREVO_SENDER_EMAIL = import.meta.env.VITE_BREVO_SENDER_EMAIL;
@@ -63,6 +65,7 @@ function formatMoney(n: number) {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 const AdminDashboard = () => {
+  const { logout } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -95,6 +98,7 @@ const AdminDashboard = () => {
     { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 size={18} /> },
     { id: 'leads', label: 'Leads', icon: <Users size={18} /> },
     { id: 'pricing', label: 'Pricing', icon: <DollarSign size={18} /> },
+    { id: 'users', label: 'Users', icon: <UserCog size={18} /> },
   ];
 
   return (
@@ -132,7 +136,7 @@ const AdminDashboard = () => {
           ))}
         </nav>
 
-        <div className="p-3 border-t border-white/10">
+        <div className="p-3 border-t border-white/10 space-y-1">
           <a href="http://localhost:8080" target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/50 hover:text-white/80 hover:bg-white/5 transition-all text-sm">
             <ExternalLink size={18} className="flex-shrink-0" />
@@ -140,6 +144,13 @@ const AdminDashboard = () => {
               {!sidebarCollapsed && (<motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="whitespace-nowrap font-medium">Open Main App</motion.span>)}
             </AnimatePresence>
           </a>
+          <button onClick={logout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-all text-sm">
+            <LogOut size={18} className="flex-shrink-0" />
+            <AnimatePresence>
+              {!sidebarCollapsed && (<motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="whitespace-nowrap font-medium">Logout</motion.span>)}
+            </AnimatePresence>
+          </button>
         </div>
 
         <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -158,6 +169,7 @@ const AdminDashboard = () => {
             {activeTab === 'dashboard' && <DashboardTab key="d" leads={leads} />}
             {activeTab === 'leads' && <LeadsTab key="l" leads={leads} onRefresh={fetchLeads} />}
             {activeTab === 'pricing' && <PricingTab key="p" pricing={pricing} onSave={setPricing} />}
+            {activeTab === 'users' && <UsersTab key="u" />}
           </AnimatePresence>
         )}
       </motion.main>
@@ -496,7 +508,6 @@ const PricingTab = ({ pricing, onSave }: { pricing: PricingConfig; onSave: (p: P
         <PricingCard title="Kitchen Costs" icon={<Wrench size={16} />}>
           <PriceInput label="Standard Kitchen" value={local.kitchen_costs.standard} onChange={(v) => updateField('kitchen_costs.standard', v)} prefix="$" />
           <PriceInput label="Open Kitchen" value={local.kitchen_costs.open} onChange={(v) => updateField('kitchen_costs.open', v)} prefix="$" />
-          <PriceInput label="Galley Kitchen" value={local.kitchen_costs.galley} onChange={(v) => updateField('kitchen_costs.galley', v)} prefix="$" />
         </PricingCard>
 
         <PricingCard title="Add-on / Amenity Costs" icon={<Wrench size={16} />}>
