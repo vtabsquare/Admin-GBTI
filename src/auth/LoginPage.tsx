@@ -16,6 +16,16 @@ const LoginPage = () => {
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const skipDevLogin = () => {
+    login({
+      id: 'dev-admin-id',
+      email: 'dev@gbti.com',
+      display_name: 'Dev Admin',
+      must_change_password: false,
+    });
+    toast.success('Logged in as Dev Admin!');
+  };
+
   const sendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) {
@@ -222,6 +232,15 @@ const LoginPage = () => {
                     Send OTP
                   </>
                 )}
+              </button>
+
+              {/* Skip Dev Button */}
+              <button
+                type="button"
+                onClick={skipDevLogin}
+                className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl bg-white/[0.04] text-white/50 text-sm font-semibold hover:bg-white/[0.08] hover:text-white transition-all duration-300 active:scale-[0.98]"
+              >
+                Skip (Dev)
               </button>
             </form>
           ) : (
