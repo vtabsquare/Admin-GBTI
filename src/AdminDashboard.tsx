@@ -5,11 +5,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   BarChart3, Users, Mail, Download, Settings, ChevronLeft, ChevronRight,
   Search, Trash2, CheckSquare, Square, Send, X, DollarSign, Home, Wrench,
-  TrendingUp, Calendar, Eye, RefreshCw, ExternalLink, LogOut, UserCog
+  TrendingUp, Calendar, Eye, RefreshCw, ExternalLink, LogOut, UserCog,
+  CreditCard, Landmark
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/auth/AuthContext';
 import UsersTab from '@/auth/UsersTab';
+import FinancingTab from '@/tabs/FinancingTab';
+import FeesTab from '@/tabs/FeesTab';
+import { useReauth } from '@/hooks/useReauth';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -52,7 +56,7 @@ const DEFAULT_PRICING: PricingConfig = {
   addon_costs: { solar: 12500, carport: 8500, water_tank: 4200, smart_home: 15800, fence: 15000, landscaping: 10000 },
 };
 
-type Tab = 'dashboard' | 'leads' | 'pricing' | 'users';
+type Tab = 'dashboard' | 'leads' | 'pricing' | 'financing' | 'fees' | 'users';
 
 const BREVO_API_KEY = import.meta.env.VITE_BREVO_API_KEY;
 const BREVO_SENDER_EMAIL = import.meta.env.VITE_BREVO_SENDER_EMAIL;
@@ -66,6 +70,7 @@ function formatMoney(n: number) {
 
 const AdminDashboard = () => {
   const { logout } = useAuth();
+  const { requireReauth, ReauthModal } = useReauth();
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -98,6 +103,8 @@ const AdminDashboard = () => {
     { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 size={18} /> },
     { id: 'leads', label: 'Leads', icon: <Users size={18} /> },
     { id: 'pricing', label: 'Pricing', icon: <DollarSign size={18} /> },
+    { id: 'financing', label: 'Mortgage', icon: <CreditCard size={18} /> },
+    { id: 'fees', label: 'Fees', icon: <Landmark size={18} /> },
     { id: 'users', label: 'Users', icon: <UserCog size={18} /> },
   ];
 
@@ -169,10 +176,13 @@ const AdminDashboard = () => {
             {activeTab === 'dashboard' && <DashboardTab key="d" leads={leads} />}
             {activeTab === 'leads' && <LeadsTab key="l" leads={leads} onRefresh={fetchLeads} />}
             {activeTab === 'pricing' && <PricingTab key="p" pricing={pricing} onSave={setPricing} />}
+            {activeTab === 'financing' && <FinancingTab key="f" />}
+            {activeTab === 'fees' && <FeesTab key="fe" />}
             {activeTab === 'users' && <UsersTab key="u" />}
           </AnimatePresence>
         )}
       </motion.main>
+      <ReauthModal />
     </div>
   );
 };

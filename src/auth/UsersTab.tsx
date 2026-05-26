@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UserPlus, Trash2, X, Send, RefreshCw, Users, Mail, User } from 'lucide-react';
+import { useReauth } from '@/hooks/useReauth';
 
 const BREVO_API_KEY = import.meta.env.VITE_BREVO_API_KEY;
 const BREVO_SENDER_EMAIL = import.meta.env.VITE_BREVO_SENDER_EMAIL;
@@ -27,6 +28,7 @@ function generateRandomPassword(length = 16): string {
 
 const UsersTab = () => {
   const { user: currentUser } = useAuth();
+  const { requireReauth, ReauthModal } = useReauth();
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -145,11 +147,15 @@ const UsersTab = () => {
     }
     if (!confirm(`Delete admin user "${userEmail}" permanently?`)) return;
 
+    // Re-authentication required for user deletion
+    const verified = await requireReauth();
+    if (!verified) return;
+
     const { error } = await supabase.rpc('delete_admin_user', { p_user_id: userId });
     if (error) {
       toast.error('Failed to delete user');
     } else {
-      toast.success('User deleted');
+      toast.success('User deleted — their session has been invalidated.');
       await fetchUsers();
     }
   };
@@ -362,6 +368,7 @@ const UsersTab = () => {
           </motion.div>
         )}
       </AnimatePresence>
+      <ReauthModal />
     </motion.div>
   );
 };
