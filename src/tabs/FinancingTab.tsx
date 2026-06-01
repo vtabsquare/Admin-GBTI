@@ -60,6 +60,7 @@ const PriceInput = ({ label, value, onChange, prefix, suffix }: any) => (
 
 export default function FinancingTab() {
   const [settings, setSettings] = useState<MortgageSettings>(DEFAULT_MORTGAGE);
+  const [settingsId, setSettingsId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { requireReauth, ReauthModal } = useReauth();
@@ -68,6 +69,7 @@ export default function FinancingTab() {
     setLoading(true);
     const { data, error } = await supabase.from('mortgage_settings').select('*').limit(1).maybeSingle();
     if (!error && data) {
+      setSettingsId(data.id);
       setSettings(data as MortgageSettings);
     }
     setLoading(false);
@@ -82,16 +84,47 @@ export default function FinancingTab() {
     if (!verified) return;
 
     setSaving(true);
-    const { error } = await supabase.rpc('update_mortgage_settings', {
-      p_default_interest: settings.default_interest_rate,
-      p_min_interest: settings.min_interest_rate,
-      p_max_interest: settings.max_interest_rate,
-      p_default_tenure: settings.default_tenure,
-      p_min_tenure: settings.min_tenure,
-      p_max_tenure: settings.max_tenure,
-      p_min_down: settings.min_down_payment_percent,
-      p_max_ltv: settings.max_ltv
-    });
+    let error: any = null;
+
+    if (settingsId) {
+      // Update existing row using its ID (provides the required WHERE clause)
+      const result = await supabase
+        .from('mortgage_settings')
+        .update({
+          default_interest_rate: settings.default_interest_rate,
+          min_interest_rate: settings.min_interest_rate,
+          max_interest_rate: settings.max_interest_rate,
+          default_tenure: settings.default_tenure,
+          min_tenure: settings.min_tenure,
+          max_tenure: settings.max_tenure,
+          min_down_payment_percent: settings.min_down_payment_percent,
+          max_ltv: settings.max_ltv,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', settingsId);
+      error = result.error;
+    } else {
+      // No existing row — insert one
+      const result = await supabase
+        .from('mortgage_settings')
+        .insert({
+          default_interest_rate: settings.default_interest_rate,
+          min_interest_rate: settings.min_interest_rate,
+          max_interest_rate: settings.max_interest_rate,
+          default_tenure: settings.default_tenure,
+          min_tenure: settings.min_tenure,
+          max_tenure: settings.max_tenure,
+          min_down_payment_percent: settings.min_down_payment_percent,
+          max_ltv: settings.max_ltv
+        })
+        .select()
+        .single();
+      error = result.error;
+      if (!error && result.data) {
+        setSettingsId(result.data.id);
+      }
+    }
+
     setSaving(false);
     if (error) toast.error('Failed to save mortgage settings: ' + error.message);
     else toast.success('Mortgage settings saved successfully!');
