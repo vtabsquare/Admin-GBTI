@@ -31,6 +31,7 @@ interface Lead {
 interface PricingConfig {
   sqft_rate: number;
   land_sqft_rate: number;
+  flat_land_cost: number;
   bedroom_cost: number;
   bathroom_cost: number;
   home_types: {
@@ -46,7 +47,7 @@ interface PricingConfig {
 }
 
 const DEFAULT_PRICING: PricingConfig = {
-  sqft_rate: 145, land_sqft_rate: 75, bedroom_cost: 9500, bathroom_cost: 6800,
+  sqft_rate: 145, land_sqft_rate: 75, flat_land_cost: 50000, bedroom_cost: 9500, bathroom_cost: 6800,
   home_types: {
     starter: { baseCost: 135000, baseArea: 900 },
     family: { baseCost: 245000, baseArea: 1400 },
@@ -502,6 +503,7 @@ const PricingTab = ({ pricing, onSave }: { pricing: PricingConfig; onSave: (p: P
         <PricingCard title="Base Rates" icon={<DollarSign size={16} />}>
           <PriceInput label="Construction Rate (per sqft)" value={local.sqft_rate} onChange={(v) => updateField('sqft_rate', v)} prefix="$" />
           <PriceInput label="Land Rate (per sqft)" value={local.land_sqft_rate} onChange={(v) => updateField('land_sqft_rate', v)} prefix="$" />
+          <PriceInput label="I Need Land Cost" value={local.flat_land_cost} onChange={(v) => updateField('flat_land_cost', v)} prefix="$" />
           <PriceInput label="Bedroom Cost (per unit)" value={local.bedroom_cost} onChange={(v) => updateField('bedroom_cost', v)} prefix="$" />
           <PriceInput label="Bathroom Cost (per unit)" value={local.bathroom_cost} onChange={(v) => updateField('bathroom_cost', v)} prefix="$" />
         </PricingCard>
