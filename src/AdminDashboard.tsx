@@ -10,10 +10,10 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/auth/AuthContext';
+import { useReauth } from '@/hooks/useReauth';
 import UsersTab from '@/auth/UsersTab';
 import FinancingTab from '@/tabs/FinancingTab';
 import FeesTab from '@/tabs/FeesTab';
-import { useReauth } from '@/hooks/useReauth';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -38,30 +38,98 @@ interface PricingConfig {
     starter: { baseCost: number; baseArea: number };
     family: { baseCost: number; baseArea: number };
     premium: { baseCost: number; baseArea: number };
+    turnkey: { baseCost: number; baseArea: number };
+    young_professional: { baseCost: number; baseArea: number };
   };
   kitchen_costs: { standard: number; open: number };
   addon_costs: {
     solar: number; carport: number; water_tank: number;
     smart_home: number; fence: number; landscaping: number;
   };
+  turnkey_cost: number;
+  young_professional_cost: number;
+  finishing_costs: {
+    starter: { standard_1storey: number; premium_1storey: number; standard_2storey: number; premium_2storey: number };
+    family: { standard_1storey: number; premium_1storey: number; standard_2storey: number; premium_2storey: number };
+    premium: { standard_1storey: number; premium_1storey: number; standard_2storey: number; premium_2storey: number };
+  };
+  interest_rate_tiers: {
+    upTo4M: number;
+    upTo9M: number;
+    upTo20M: number;
+    upTo40M: number;
+    upTo60M: number;
+    above60M: number;
+  };
+  loyalty_discounts: {
+    salary: number;
+    home_start: number;
+    credit_card: number;
+    insurance: number;
+    auto_loan: number;
+    other_credit: number;
+    investments: number;
+  };
 }
 
 const DEFAULT_PRICING: PricingConfig = {
-  sqft_rate: 145, land_sqft_rate: 75, flat_land_cost: 50000, bedroom_cost: 9500, bathroom_cost: 6800,
+  sqft_rate: 145, land_sqft_rate: 75, flat_land_cost: 50000, bedroom_cost: 0, bathroom_cost: 0,
   home_types: {
     starter: { baseCost: 135000, baseArea: 900 },
     family: { baseCost: 245000, baseArea: 1400 },
     premium: { baseCost: 410000, baseArea: 2100 },
+    turnkey: { baseCost: 350000, baseArea: 0 },
+    young_professional: { baseCost: 180000, baseArea: 0 },
   },
-  kitchen_costs: { standard: 8000, open: 14000 },
-  addon_costs: { solar: 12500, carport: 8500, water_tank: 4200, smart_home: 15800, fence: 15000, landscaping: 10000 },
+  kitchen_costs: { standard: 0, open: 0 },
+  addon_costs: { solar: 100000, carport: 0, water_tank: 18000, smart_home: 300000, fence: 2500000, landscaping: 2000000 },
+  turnkey_cost: 350000,
+  young_professional_cost: 180000,
+  finishing_costs: {
+    starter: {
+      standard_1storey: 14700000,
+      premium_1storey: 19866000,
+      standard_2storey: 24110400,
+      premium_2storey: 32580000,
+    },
+    family: {
+      standard_1storey: 22050000,
+      premium_1storey: 29799000,
+      standard_2storey: 36165600,
+      premium_2storey: 48870000,
+    },
+    premium: {
+      standard_1storey: 25725000,
+      premium_1storey: 34765500,
+      standard_2storey: 42193200,
+      premium_2storey: 57015000,
+    },
+  },
+  interest_rate_tiers: {
+    upTo4M: 3.5,
+    upTo9M: 3.7,
+    upTo20M: 4.25,
+    upTo40M: 4.75,
+    upTo60M: 4.99,
+    above60M: 6.5,
+  },
+  loyalty_discounts: {
+    salary: 0.05,
+    home_start: 0.05,
+    credit_card: 0.10,
+    insurance: 0.05,
+    auto_loan: 0.10,
+    other_credit: 0.10,
+    investments: 0.05,
+  },
 };
 
 type Tab = 'dashboard' | 'leads' | 'pricing' | 'financing' | 'fees' | 'users';
 
-const BREVO_API_KEY = import.meta.env.VITE_BREVO_API_KEY;
-const BREVO_SENDER_EMAIL = import.meta.env.VITE_BREVO_SENDER_EMAIL;
-const BREVO_SENDER_NAME = import.meta.env.VITE_BREVO_SENDER_NAME || 'GBTI Architectural Team';
+const INFOBIP_API_KEY = import.meta.env.VITE_INFOBIP_API_KEY;
+const INFOBIP_BASE_URL = import.meta.env.VITE_INFOBIP_BASE_URL;
+const INFOBIP_SENDER_EMAIL = import.meta.env.VITE_INFOBIP_SENDER_EMAIL;
+const INFOBIP_SENDER_NAME = import.meta.env.VITE_INFOBIP_SENDER_NAME || 'GBTI Architectural Team';
 
 function formatMoney(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -333,7 +401,7 @@ const LeadsTab = ({ leads, onRefresh }: { leads: Lead[]; onRefresh: () => Promis
     const rows = toExport.map((l) => ({
       Name: l.name, Email: l.email, Phone: l.phone, Timeline: l.timeline || '',
       'Home Type': l.config?.home_type || '', Bedrooms: l.config?.bedrooms || '', Bathrooms: l.config?.bathrooms || '',
-      Kitchen: l.config?.kitchen || '', 'Add-ons': (l.config?.addons || []).join(', '),
+      Kitchen: l.config?.kitchen || '', 'Finishing': l.config?.finishing_quality === 'premium' ? 'Premium' : 'Standard', 'Add-ons': (l.config?.addons || []).join(', '),
       'Total Cost': l.total_cost || 0, 'Created At': new Date(l.created_at).toLocaleString(),
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -347,7 +415,7 @@ const LeadsTab = ({ leads, onRefresh }: { leads: Lead[]; onRefresh: () => Promis
 
   const sendBulkEmail = async () => {
     if (!emailSubject.trim() || !emailBody.trim()) { toast.error('Please fill in subject and body'); return; }
-    if (!BREVO_API_KEY || !BREVO_SENDER_EMAIL) { toast.error('Brevo API is not configured'); return; }
+    if (!INFOBIP_API_KEY || !INFOBIP_BASE_URL || !INFOBIP_SENDER_EMAIL) { toast.error('Email service is not configured'); return; }
     const selectedLeads = leads.filter((l) => selected.has(l.id));
     if (selectedLeads.length === 0) { toast.error('No leads selected'); return; }
 
@@ -355,17 +423,16 @@ const LeadsTab = ({ leads, onRefresh }: { leads: Lead[]; onRefresh: () => Promis
     let sent = 0, failed = 0;
     for (const lead of selectedLeads) {
       try {
-        const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        const form = new FormData();
+        form.append('from', `${INFOBIP_SENDER_NAME} <${INFOBIP_SENDER_EMAIL}>`);
+        form.append('to', `${lead.name} <${lead.email}>`);
+        form.append('subject', emailSubject);
+        form.append('html', `<div style="font-family:Arial,sans-serif;color:#111;line-height:1.6;max-width:640px;margin:0 auto;padding:24px;"><p>Hi ${lead.name},</p><div style="margin:16px 0;white-space:pre-wrap;">${emailBody.replace(/\n/g, '<br/>')}</div><hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;"/><p style="font-size:12px;color:#9ca3af;">Sent by GBTI Architectural Team</p></div>`);
+        form.append('text', `Hi ${lead.name},\n\n${emailBody}\n\n--\nGBTI Architectural Team`);
+        const res = await fetch(`${INFOBIP_BASE_URL}/email/3/send`, {
           method: 'POST',
-          headers: { accept: 'application/json', 'api-key': BREVO_API_KEY, 'content-type': 'application/json' },
-          body: JSON.stringify({
-            sender: { email: BREVO_SENDER_EMAIL, name: BREVO_SENDER_NAME },
-            to: [{ email: lead.email, name: lead.name }],
-            replyTo: { email: BREVO_SENDER_EMAIL, name: BREVO_SENDER_NAME },
-            subject: emailSubject,
-            htmlContent: `<div style="font-family:Arial,sans-serif;color:#111;line-height:1.6;max-width:640px;margin:0 auto;padding:24px;"><p>Hi ${lead.name},</p><div style="margin:16px 0;white-space:pre-wrap;">${emailBody.replace(/\n/g, '<br/>')}</div><hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;"/><p style="font-size:12px;color:#9ca3af;">Sent by GBTI Architectural Team</p></div>`,
-            textContent: `Hi ${lead.name},\n\n${emailBody}\n\n--\nGBTI Architectural Team`,
-          }),
+          headers: { Authorization: `App ${INFOBIP_API_KEY}` },
+          body: form,
         });
         if (res.ok) sent++; else failed++;
       } catch { failed++; }
@@ -433,6 +500,7 @@ const LeadsTab = ({ leads, onRefresh }: { leads: Lead[]; onRefresh: () => Promis
             <div className="space-y-3 text-sm">
               {[['Name', viewLead.name], ['Email', viewLead.email], ['Phone', viewLead.phone], ['Timeline', viewLead.timeline || '—'], ['Total Cost', viewLead.total_cost ? formatMoney(viewLead.total_cost) : '—'],
                 ['Home Type', viewLead.config?.home_type || '—'], ['Bedrooms', viewLead.config?.bedrooms || '—'], ['Bathrooms', viewLead.config?.bathrooms || '—'], ['Kitchen', viewLead.config?.kitchen || '—'],
+                ['Finishing', viewLead.config?.finishing_quality === 'premium' ? 'Premium' : 'Standard'],
                 ['Roof', viewLead.config?.roof || '—'], ['Material', viewLead.config?.material || '—'], ['Land', viewLead.config?.land || '—'], ['Add-ons', (viewLead.config?.addons || []).join(', ') || 'None'],
                 ['Double Storey', viewLead.config?.is_double_storey ? 'Yes' : 'No'], ['Submitted', new Date(viewLead.created_at).toLocaleString()]
               ].map(([label, value]) => <div key={label as string} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0"><span className="text-muted-foreground text-xs uppercase tracking-wider">{label}</span><span className="font-medium">{value}</span></div>)}
@@ -476,9 +544,9 @@ const PricingTab = ({ pricing, onSave }: { pricing: PricingConfig; onSave: (p: P
   const save = async () => {
     setSaving(true);
     const { error } = await supabase.from('admin_settings').upsert({ key: 'pricing', value: local as any, updated_at: new Date().toISOString() });
-    setSaving(false);
-    if (error) toast.error('Failed to save pricing: ' + error.message);
+    if (error) toast.error('Failed to save pricing');
     else { toast.success('Pricing saved! Main app will reflect changes on next load.'); onSave(local); }
+    setSaving(false);
   };
 
   const updateField = (path: string, value: number) => {
@@ -504,31 +572,73 @@ const PricingTab = ({ pricing, onSave }: { pricing: PricingConfig; onSave: (p: P
           <PriceInput label="Construction Rate (per sqft)" value={local.sqft_rate} onChange={(v) => updateField('sqft_rate', v)} prefix="$" />
           <PriceInput label="Land Rate (per sqft)" value={local.land_sqft_rate} onChange={(v) => updateField('land_sqft_rate', v)} prefix="$" />
           <PriceInput label="I Need Land Cost" value={local.flat_land_cost} onChange={(v) => updateField('flat_land_cost', v)} prefix="$" />
-          <PriceInput label="Bedroom Cost (per unit)" value={local.bedroom_cost} onChange={(v) => updateField('bedroom_cost', v)} prefix="$" />
-          <PriceInput label="Bathroom Cost (per unit)" value={local.bathroom_cost} onChange={(v) => updateField('bathroom_cost', v)} prefix="$" />
         </PricingCard>
 
-        <PricingCard title="Home Type Base Costs" icon={<Home size={16} />}>
-          <PriceInput label="Starter Base Cost" value={local.home_types.starter.baseCost} onChange={(v) => updateField('home_types.starter.baseCost', v)} prefix="$" />
+        <PricingCard title="Home Type Included Area" icon={<Home size={16} />}>
           <PriceInput label="Starter Base Area (sqft)" value={local.home_types.starter.baseArea} onChange={(v) => updateField('home_types.starter.baseArea', v)} />
-          <PriceInput label="Family Base Cost" value={local.home_types.family.baseCost} onChange={(v) => updateField('home_types.family.baseCost', v)} prefix="$" />
           <PriceInput label="Family Base Area (sqft)" value={local.home_types.family.baseArea} onChange={(v) => updateField('home_types.family.baseArea', v)} />
-          <PriceInput label="Premium Base Cost" value={local.home_types.premium.baseCost} onChange={(v) => updateField('home_types.premium.baseCost', v)} prefix="$" />
           <PriceInput label="Premium Base Area (sqft)" value={local.home_types.premium.baseArea} onChange={(v) => updateField('home_types.premium.baseArea', v)} />
         </PricingCard>
 
-        <PricingCard title="Kitchen Costs" icon={<Wrench size={16} />}>
-          <PriceInput label="Standard Kitchen" value={local.kitchen_costs.standard} onChange={(v) => updateField('kitchen_costs.standard', v)} prefix="$" />
-          <PriceInput label="Open Kitchen" value={local.kitchen_costs.open} onChange={(v) => updateField('kitchen_costs.open', v)} prefix="$" />
+        <PricingCard title="Add-on / Amenity Costs" icon={<Wrench size={16} />}>
+          <div className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground/50 font-bold mb-2">Included in total + loan</div>
+          <PriceInput label="Perimeter Fence/Bridge" value={local.addon_costs.fence} onChange={(v) => updateField('addon_costs.fence', v)} prefix="$" />
+          <PriceInput label="Furniture" value={local.addon_costs.landscaping} onChange={(v) => updateField('addon_costs.landscaping', v)} prefix="$" />
+          <div className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground/50 font-bold mt-4 mb-2">Included in total only (not loan-eligible)</div>
+          <PriceInput label="Solar Panels *" value={local.addon_costs.solar} onChange={(v) => updateField('addon_costs.solar', v)} prefix="$" />
+          <PriceInput label="Water Tank *" value={local.addon_costs.water_tank} onChange={(v) => updateField('addon_costs.water_tank', v)} prefix="$" />
+          <PriceInput label="Generator *" value={local.addon_costs.smart_home} onChange={(v) => updateField('addon_costs.smart_home', v)} prefix="$" />
+          <div className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground/50 font-bold mt-4 mb-2">Layout / visual only (no price)</div>
+          <div className="flex items-center justify-between text-sm text-muted-foreground/60 py-1">
+            <span>Carport</span><span className="font-display font-semibold text-muted-foreground/40">$0 — Layout only</span>
+          </div>
         </PricingCard>
 
-        <PricingCard title="Add-on / Amenity Costs" icon={<Wrench size={16} />}>
-          <PriceInput label="Solar Panels" value={local.addon_costs.solar} onChange={(v) => updateField('addon_costs.solar', v)} prefix="$" />
-          <PriceInput label="Carport" value={local.addon_costs.carport} onChange={(v) => updateField('addon_costs.carport', v)} prefix="$" />
-          <PriceInput label="Water Tank" value={local.addon_costs.water_tank} onChange={(v) => updateField('addon_costs.water_tank', v)} prefix="$" />
-          <PriceInput label="Smart Home Package" value={local.addon_costs.smart_home} onChange={(v) => updateField('addon_costs.smart_home', v)} prefix="$" />
-          <PriceInput label="Perimeter Fence" value={local.addon_costs.fence} onChange={(v) => updateField('addon_costs.fence', v)} prefix="$" />
-          <PriceInput label="Landscaping" value={local.addon_costs.landscaping} onChange={(v) => updateField('addon_costs.landscaping', v)} prefix="$" />
+        <PricingCard title="External Build Costs" icon={<ExternalLink size={16} />}>
+          <PriceInput label="Turnkey Build Package" value={local.turnkey_cost} onChange={(v) => updateField('turnkey_cost', v)} prefix="$" />
+          <PriceInput label="Young Professional Package" value={local.young_professional_cost} onChange={(v) => updateField('young_professional_cost', v)} prefix="$" />
+        </PricingCard>
+
+        <PricingCard title="Finishing Quality — Starter" icon={<Home size={16} />}>
+          <PriceInput label="Standard · 1 Storey" value={local.finishing_costs.starter.standard_1storey} onChange={(v) => updateField('finishing_costs.starter.standard_1storey', v)} prefix="$" />
+          <PriceInput label="Premium · 1 Storey" value={local.finishing_costs.starter.premium_1storey} onChange={(v) => updateField('finishing_costs.starter.premium_1storey', v)} prefix="$" />
+          <PriceInput label="Standard · 2 Storey" value={local.finishing_costs.starter.standard_2storey} onChange={(v) => updateField('finishing_costs.starter.standard_2storey', v)} prefix="$" />
+          <PriceInput label="Premium · 2 Storey" value={local.finishing_costs.starter.premium_2storey} onChange={(v) => updateField('finishing_costs.starter.premium_2storey', v)} prefix="$" />
+        </PricingCard>
+
+        <PricingCard title="Finishing Quality — Family" icon={<Home size={16} />}>
+          <PriceInput label="Standard · 1 Storey" value={local.finishing_costs.family.standard_1storey} onChange={(v) => updateField('finishing_costs.family.standard_1storey', v)} prefix="$" />
+          <PriceInput label="Premium · 1 Storey" value={local.finishing_costs.family.premium_1storey} onChange={(v) => updateField('finishing_costs.family.premium_1storey', v)} prefix="$" />
+          <PriceInput label="Standard · 2 Storey" value={local.finishing_costs.family.standard_2storey} onChange={(v) => updateField('finishing_costs.family.standard_2storey', v)} prefix="$" />
+          <PriceInput label="Premium · 2 Storey" value={local.finishing_costs.family.premium_2storey} onChange={(v) => updateField('finishing_costs.family.premium_2storey', v)} prefix="$" />
+        </PricingCard>
+
+        <PricingCard title="Finishing Quality — Executive" icon={<Home size={16} />}>
+          <PriceInput label="Standard · 1 Storey" value={local.finishing_costs.premium.standard_1storey} onChange={(v) => updateField('finishing_costs.premium.standard_1storey', v)} prefix="$" />
+          <PriceInput label="Premium · 1 Storey" value={local.finishing_costs.premium.premium_1storey} onChange={(v) => updateField('finishing_costs.premium.premium_1storey', v)} prefix="$" />
+          <PriceInput label="Standard · 2 Storey" value={local.finishing_costs.premium.standard_2storey} onChange={(v) => updateField('finishing_costs.premium.standard_2storey', v)} prefix="$" />
+          <PriceInput label="Premium · 2 Storey" value={local.finishing_costs.premium.premium_2storey} onChange={(v) => updateField('finishing_costs.premium.premium_2storey', v)} prefix="$" />
+        </PricingCard>
+
+        {/* Interest Rate Tiers */}
+        <PricingCard title="Interest Rate Tiers" icon={<DollarSign size={16} />}>
+          <PriceInput label="Up to $4M" value={local.interest_rate_tiers?.upTo4M ?? 3.5} onChange={(v) => updateField('interest_rate_tiers.upTo4M', v)} suffix="%" />
+          <PriceInput label="$4M - $9M" value={local.interest_rate_tiers?.upTo9M ?? 3.7} onChange={(v) => updateField('interest_rate_tiers.upTo9M', v)} suffix="%" />
+          <PriceInput label="$9M - $20M" value={local.interest_rate_tiers?.upTo20M ?? 4.25} onChange={(v) => updateField('interest_rate_tiers.upTo20M', v)} suffix="%" />
+          <PriceInput label="$20M - $40M" value={local.interest_rate_tiers?.upTo40M ?? 4.75} onChange={(v) => updateField('interest_rate_tiers.upTo40M', v)} suffix="%" />
+          <PriceInput label="$40M - $60M" value={local.interest_rate_tiers?.upTo60M ?? 4.99} onChange={(v) => updateField('interest_rate_tiers.upTo60M', v)} suffix="%" />
+          <PriceInput label="Above $60M" value={local.interest_rate_tiers?.above60M ?? 6.5} onChange={(v) => updateField('interest_rate_tiers.above60M', v)} suffix="%" />
+        </PricingCard>
+
+        {/* Loyalty Discounts */}
+        <PricingCard title="Loyalty Discounts" icon={<DollarSign size={16} />}>
+          <PriceInput label="Salary Assignment" value={local.loyalty_discounts?.salary ?? 0.05} onChange={(v) => updateField('loyalty_discounts.salary', v)} suffix="%" />
+          <PriceInput label="Home Start Advantage" value={local.loyalty_discounts?.home_start ?? 0.05} onChange={(v) => updateField('loyalty_discounts.home_start', v)} suffix="%" />
+          <PriceInput label="Credit Card" value={local.loyalty_discounts?.credit_card ?? 0.10} onChange={(v) => updateField('loyalty_discounts.credit_card', v)} suffix="%" />
+          <PriceInput label="Insurance" value={local.loyalty_discounts?.insurance ?? 0.05} onChange={(v) => updateField('loyalty_discounts.insurance', v)} suffix="%" />
+          <PriceInput label="Auto Loan" value={local.loyalty_discounts?.auto_loan ?? 0.10} onChange={(v) => updateField('loyalty_discounts.auto_loan', v)} suffix="%" />
+          <PriceInput label="Other Credit" value={local.loyalty_discounts?.other_credit ?? 0.10} onChange={(v) => updateField('loyalty_discounts.other_credit', v)} suffix="%" />
+          <PriceInput label="Investments" value={local.loyalty_discounts?.investments ?? 0.05} onChange={(v) => updateField('loyalty_discounts.investments', v)} suffix="%" />
         </PricingCard>
       </div>
     </TabWrapper>
@@ -542,12 +652,13 @@ const PricingCard = ({ title, icon, children }: { title: string; icon: React.Rea
   </div>
 );
 
-const PriceInput = ({ label, value, onChange, prefix }: { label: string; value: number; onChange: (v: number) => void; prefix?: string }) => (
+const PriceInput = ({ label, value, onChange, prefix, suffix }: { label: string; value: number; onChange: (v: number) => void; prefix?: string; suffix?: string }) => (
   <div className="flex items-center justify-between gap-4">
     <label className="text-sm text-foreground/80 flex-1">{label}</label>
     <div className="flex items-center gap-1 bg-background rounded-lg border border-border px-3 py-1.5 w-36">
       {prefix && <span className="text-muted-foreground/50 text-sm">{prefix}</span>}
-      <input type="number" value={value} onChange={(e) => onChange(Number(e.target.value) || 0)} className="w-full bg-transparent outline-none text-sm font-display font-semibold text-right" />
+      <input type="number" step="any" value={value} onChange={(e) => onChange(Number(e.target.value) || 0)} className="w-full bg-transparent outline-none text-sm font-display font-semibold text-right" />
+      {suffix && <span className="text-muted-foreground/50 text-sm">{suffix}</span>}
     </div>
   </div>
 );

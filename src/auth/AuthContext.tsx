@@ -55,12 +55,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   /**
-   * Login — stores session and generates a new session token.
+   * Login — stores session and generated session token.
    * Security requirement: "A new session token must be generated upon
    * each successful authentication to prevent session fixation."
+   * Now uses the securely generated token from the Edge Function / DB.
    */
   const login = useCallback((u: AdminUser) => {
-    const token = generateSessionToken();
+    const token = u.sessionToken || generateSessionToken(); // Fallback for dev mode
     setUser(u);
     setSessionToken(token);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(u));

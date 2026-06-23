@@ -4,9 +4,10 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Mail, KeyRound, Lock, Eye, EyeOff, Send } from 'lucide-react';
 
-const BREVO_API_KEY = import.meta.env.VITE_BREVO_API_KEY;
-const BREVO_SENDER_EMAIL = import.meta.env.VITE_BREVO_SENDER_EMAIL;
-const BREVO_SENDER_NAME = import.meta.env.VITE_BREVO_SENDER_NAME || 'GBTI Architectural Team';
+const INFOBIP_API_KEY = import.meta.env.VITE_INFOBIP_API_KEY;
+const INFOBIP_BASE_URL = import.meta.env.VITE_INFOBIP_BASE_URL;
+const INFOBIP_SENDER_EMAIL = import.meta.env.VITE_INFOBIP_SENDER_EMAIL;
+const INFOBIP_SENDER_NAME = import.meta.env.VITE_INFOBIP_SENDER_NAME || 'GBTI Architectural Team';
 
 interface ForgotPasswordPageProps {
   onBack: () => void;
@@ -49,42 +50,37 @@ const ForgotPasswordPage = ({ onBack }: ForgotPasswordPageProps) => {
         return;
       }
 
-      // Send email via Brevo
-      if (BREVO_API_KEY && BREVO_SENDER_EMAIL) {
+      // Send email via Infobip
+      if (INFOBIP_API_KEY && INFOBIP_BASE_URL && INFOBIP_SENDER_EMAIL) {
         try {
-          await fetch('https://api.brevo.com/v3/smtp/email', {
+          const form = new FormData();
+          form.append('from', `${INFOBIP_SENDER_NAME} <${INFOBIP_SENDER_EMAIL}>`);
+          form.append('to', email.trim());
+          form.append('subject', 'GBTI Admin — Password Reset Code');
+          form.append('html', `
+            <div style="font-family:Arial,sans-serif;color:#111;line-height:1.6;max-width:560px;margin:0 auto;padding:32px;">
+              <div style="text-align:center;margin-bottom:24px;">
+                <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#b8956a,#a07850);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:20px;">G</div>
+              </div>
+              <h2 style="text-align:center;margin:0 0 8px;color:#111;font-size:20px;">Password Reset Code</h2>
+              <p style="text-align:center;color:#6b7280;margin:0 0 24px;font-size:14px;">Use the code below to reset your GBTI Admin password</p>
+              <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:20px;text-align:center;margin:0 0 24px;">
+                <span style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#111;">${data}</span>
+              </div>
+              <p style="text-align:center;color:#9ca3af;font-size:12px;margin:0;">This code expires in 15 minutes. If you did not request this, please ignore this email.</p>
+              <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;"/>
+              <p style="text-align:center;font-size:11px;color:#9ca3af;">GBTI Architectural Team</p>
+            </div>
+          `);
+          form.append('text', `Your GBTI Admin password reset code is: ${data}\n\nThis code expires in 15 minutes.\nIf you did not request this, please ignore this email.\n\n-- GBTI Architectural Team`);
+          await fetch(`${INFOBIP_BASE_URL}/email/3/send`, {
             method: 'POST',
-            headers: {
-              accept: 'application/json',
-              'api-key': BREVO_API_KEY,
-              'content-type': 'application/json',
-            },
-            body: JSON.stringify({
-              sender: { email: BREVO_SENDER_EMAIL, name: BREVO_SENDER_NAME },
-              to: [{ email: email.trim() }],
-              replyTo: { email: BREVO_SENDER_EMAIL, name: BREVO_SENDER_NAME },
-              subject: 'GBTI Admin — Password Reset Code',
-              htmlContent: `
-                <div style="font-family:Arial,sans-serif;color:#111;line-height:1.6;max-width:560px;margin:0 auto;padding:32px;">
-                  <div style="text-align:center;margin-bottom:24px;">
-                    <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#b8956a,#a07850);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:20px;">G</div>
-                  </div>
-                  <h2 style="text-align:center;margin:0 0 8px;color:#111;font-size:20px;">Password Reset Code</h2>
-                  <p style="text-align:center;color:#6b7280;margin:0 0 24px;font-size:14px;">Use the code below to reset your GBTI Admin password</p>
-                  <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:20px;text-align:center;margin:0 0 24px;">
-                    <span style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#111;">${data}</span>
-                  </div>
-                  <p style="text-align:center;color:#9ca3af;font-size:12px;margin:0;">This code expires in 15 minutes. If you did not request this, please ignore this email.</p>
-                  <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;"/>
-                  <p style="text-align:center;font-size:11px;color:#9ca3af;">GBTI Architectural Team</p>
-                </div>
-              `,
-              textContent: `Your GBTI Admin password reset code is: ${data}\n\nThis code expires in 15 minutes.\nIf you did not request this, please ignore this email.\n\n-- GBTI Architectural Team`,
-            }),
+            headers: { Authorization: `App ${INFOBIP_API_KEY}` },
+            body: form,
           });
         } catch {
           // Email send failed but code is set — user can still try
-          console.error('Brevo email send failed');
+          console.error('Infobip email send failed');
         }
       }
 

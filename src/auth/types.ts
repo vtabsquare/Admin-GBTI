@@ -3,4 +3,5 @@ export interface AdminUser {
   email: string;
   display_name: string;
   must_change_password: boolean;
+  sessionToken?: string;
 }
