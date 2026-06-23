@@ -129,7 +129,7 @@ type Tab = 'dashboard' | 'leads' | 'pricing' | 'financing' | 'fees' | 'users';
 const INFOBIP_API_KEY = import.meta.env.VITE_INFOBIP_API_KEY;
 const INFOBIP_BASE_URL = import.meta.env.VITE_INFOBIP_BASE_URL;
 const INFOBIP_SENDER_EMAIL = import.meta.env.VITE_INFOBIP_SENDER_EMAIL;
-const INFOBIP_SENDER_NAME = import.meta.env.VITE_INFOBIP_SENDER_NAME || 'GBTI Architectural Team';
+const INFOBIP_SENDER_NAME = import.meta.env.VITE_INFOBIP_SENDER_NAME || 'GBTI Loans Team';
 
 function formatMoney(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -315,7 +315,7 @@ const DashboardTab = ({ leads }: { leads: Lead[] }) => {
         <StatCard label="Pipeline Value" value={formatMoney(totalRevenue)} icon={<DollarSign size={16} />} accent />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div className="mb-8">
         <div className="rounded-2xl border border-border bg-surface p-6">
           <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60 mb-6">Home Type Distribution</h3>
           <div className="space-y-4">
@@ -324,17 +324,6 @@ const DashboardTab = ({ leads }: { leads: Lead[] }) => {
                 <div className="h-2 rounded-full bg-muted/30 overflow-hidden"><motion.div initial={{ width: 0 }} animate={{ width: `${(d.count / maxHT) * 100}%` }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }} className="h-full rounded-full bg-gradient-to-r from-clay/80 to-clay" /></div></div>
             ))}
             {homeTypeDistribution.length === 0 && <p className="text-sm text-muted-foreground/50 text-center py-4">No data yet</p>}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-border bg-surface p-6">
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60 mb-6">Timeline Preferences</h3>
-          <div className="space-y-4">
-            {timelineDistribution.map((d) => (
-              <div key={d.name}><div className="flex items-center justify-between mb-1.5"><span className="text-sm font-medium">{d.name}</span><span className="text-sm font-display font-semibold">{d.count}</span></div>
-                <div className="h-2 rounded-full bg-muted/30 overflow-hidden"><motion.div initial={{ width: 0 }} animate={{ width: `${(d.count / maxTL) * 100}%` }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }} className="h-full rounded-full bg-gradient-to-r from-ink/60 to-ink/90" /></div></div>
-            ))}
-            {timelineDistribution.length === 0 && <p className="text-sm text-muted-foreground/50 text-center py-4">No data yet</p>}
           </div>
         </div>
       </div>
@@ -427,8 +416,8 @@ const LeadsTab = ({ leads, onRefresh }: { leads: Lead[]; onRefresh: () => Promis
         form.append('from', `${INFOBIP_SENDER_NAME} <${INFOBIP_SENDER_EMAIL}>`);
         form.append('to', `${lead.name} <${lead.email}>`);
         form.append('subject', emailSubject);
-        form.append('html', `<div style="font-family:Arial,sans-serif;color:#111;line-height:1.6;max-width:640px;margin:0 auto;padding:24px;"><p>Hi ${lead.name},</p><div style="margin:16px 0;white-space:pre-wrap;">${emailBody.replace(/\n/g, '<br/>')}</div><hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;"/><p style="font-size:12px;color:#9ca3af;">Sent by GBTI Architectural Team</p></div>`);
-        form.append('text', `Hi ${lead.name},\n\n${emailBody}\n\n--\nGBTI Architectural Team`);
+        form.append('html', `<div style="font-family:Arial,sans-serif;color:#111;line-height:1.6;max-width:640px;margin:0 auto;padding:24px;"><p>Hi ${lead.name},</p><div style="margin:16px 0;white-space:pre-wrap;">${emailBody.replace(/\n/g, '<br/>')}</div><hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;"/><p style="font-size:12px;color:#9ca3af;">Sent by GBTI Loans Team</p></div>`);
+        form.append('text', `Hi ${lead.name},\n\n${emailBody}\n\n--\nGBTI Loans Team`);
         const res = await fetch(`${INFOBIP_BASE_URL}/email/3/send`, {
           method: 'POST',
           headers: { Authorization: `App ${INFOBIP_API_KEY}` },
