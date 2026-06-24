@@ -138,7 +138,7 @@ function formatMoney(n: number) {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 const AdminDashboard = () => {
-  const { logout } = useAuth();
+  const { logout, sessionToken } = useAuth();
   const { requireReauth, ReauthModal } = useReauth();
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -147,15 +147,18 @@ const AdminDashboard = () => {
   const [pricing, setPricing] = useState<PricingConfig>(DEFAULT_PRICING);
 
   const fetchLeads = useCallback(async () => {
-    const { data, error } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
-    if (!error && data) setLeads(data as Lead[]);
+    const { data, error } = await supabase.schema('api').rpc('admin_get_leads', { p_token: sessionToken });
+    if (!error && data) setLeads((data as Lead[]) || []);
     else if (error) toast.error('Failed to load leads');
-  }, []);
+  }, [sessionToken]);
 
   const fetchPricing = useCallback(async () => {
-    const { data, error } = await supabase.from('admin_settings').select('*').eq('key', 'pricing').maybeSingle();
-    if (!error && data?.value) setPricing({ ...DEFAULT_PRICING, ...(data.value as any) });
-  }, []);
+    const { data, error } = await supabase.schema('api').rpc('admin_get_settings', { p_token: sessionToken });
+    if (!error && data) {
+      const pricingRow = (data as { key: string; value: any }[])?.find((s) => s.key === 'pricing');
+      if (pricingRow?.value) setPricing({ ...DEFAULT_PRICING, ...(pricingRow.value as any) });
+    }
+  }, [sessionToken]);
 
   useEffect(() => {
     const loadAll = async () => {
@@ -378,9 +381,10 @@ const LeadsTab = ({ leads, onRefresh }: { leads: Lead[]; onRefresh: () => Promis
   const toggleSelect = (id: string) => setSelected((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const selectAll = () => { selected.size === filtered.length ? setSelected(new Set()) : setSelected(new Set(filtered.map((l) => l.id))); };
 
+  const { sessionToken: leadsSessionToken } = useAuth();
   const deleteLead = async (id: string) => {
     if (!confirm('Delete this lead permanently?')) return;
-    const { error } = await supabase.from('leads').delete().eq('id', id);
+    const { error } = await supabase.schema('api').rpc('admin_delete_lead', { p_token: leadsSessionToken, p_lead_id: id });
     if (error) toast.error('Failed to delete');
     else { toast.success('Lead deleted'); await onRefresh(); setSelected((p) => { const n = new Set(p); n.delete(id); return n; }); }
   };
@@ -530,9 +534,10 @@ const PricingTab = ({ pricing, onSave }: { pricing: PricingConfig; onSave: (p: P
 
   useEffect(() => setLocal(pricing), [pricing]);
 
+  const { sessionToken: pricingSessionToken } = useAuth();
   const save = async () => {
     setSaving(true);
-    const { error } = await supabase.from('admin_settings').upsert({ key: 'pricing', value: local as any, updated_at: new Date().toISOString() });
+    const { error } = await supabase.schema('api').rpc('admin_upsert_settings', { p_token: pricingSessionToken, p_key: 'pricing', p_value: local as any });
     if (error) toast.error('Failed to save pricing');
     else { toast.success('Pricing saved! Main app will reflect changes on next load.'); onSave(local); }
     setSaving(false);

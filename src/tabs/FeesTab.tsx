@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { Settings, Landmark, FileText, Receipt } from 'lucide-react';
 import { useReauth } from '@/hooks/useReauth';
+import { useAuth } from '@/auth/AuthContext';
 
 interface FeeRules {
   solicitor_fee_percent: number;
@@ -73,15 +74,16 @@ export default function FeesTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { requireReauth, ReauthModal } = useReauth();
+  const { sessionToken } = useAuth();
 
   const fetchFees = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('fee_rules').select('*').limit(1).maybeSingle();
+    const { data, error } = await supabase.schema('api').rpc('admin_get_fee_rules', { p_token: sessionToken });
     if (!error && data) {
       setFees(data as FeeRules);
     }
     setLoading(false);
-  }, []);
+  }, [sessionToken]);
 
   useEffect(() => {
     fetchFees();
@@ -92,14 +94,15 @@ export default function FeesTab() {
     if (!verified) return;
 
     setSaving(true);
-    const { error } = await supabase.rpc('update_fee_rules', {
+    const { error } = await supabase.schema('api').rpc('admin_update_fee_rules', {
+      p_token: sessionToken,
       p_solicitor: fees.solicitor_fee_percent,
       p_solicitor_fixed: fees.solicitor_fixed_charge,
       p_registry: fees.registry_fee_percent,
       p_stamp: fees.stamp_duty_percent,
       p_misc: fees.misc_fee,
       p_vat_enabled: fees.vat_enabled,
-      p_vat_percent: fees.vat_percent
+      p_vat_percent: fees.vat_percent,
     });
     setSaving(false);
     if (error) toast.error('Failed to save fees: ' + error.message);

@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { Settings, Percent, Clock, CreditCard } from 'lucide-react';
 import { useReauth } from '@/hooks/useReauth';
+import { useAuth } from '@/auth/AuthContext';
 
 interface MortgageSettings {
   id?: string;
@@ -64,15 +65,16 @@ export default function FinancingTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { requireReauth, ReauthModal } = useReauth();
+  const { sessionToken } = useAuth();
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('mortgage_settings').select('*').limit(1).maybeSingle();
+    const { data, error } = await supabase.schema('api').rpc('admin_get_mortgage_settings', { p_token: sessionToken });
     if (!error && data) {
       setSettings(data as MortgageSettings);
     }
     setLoading(false);
-  }, []);
+  }, [sessionToken]);
 
   useEffect(() => {
     fetchSettings();
@@ -83,21 +85,18 @@ export default function FinancingTab() {
     if (!verified) return;
 
     setSaving(true);
-    let error: any = null;
-
-    if (settings.id) {
-      const { id, ...fields } = settings;
-      const res = await supabase
-        .from('mortgage_settings')
-        .update({ ...fields, updated_at: new Date().toISOString() })
-        .eq('id', id);
-      error = res.error;
-    } else {
-      const { id: _id, ...fields } = settings;
-      const res = await supabase.from('mortgage_settings').insert(fields);
-      error = res.error;
-    }
-
+    const { error } = await supabase.schema('api').rpc('admin_upsert_mortgage_settings', {
+      p_token: sessionToken,
+      p_id: settings.id || null,
+      p_default_interest_rate: settings.default_interest_rate,
+      p_min_interest_rate: settings.min_interest_rate,
+      p_max_interest_rate: settings.max_interest_rate,
+      p_default_tenure: settings.default_tenure,
+      p_min_tenure: settings.min_tenure,
+      p_max_tenure: settings.max_tenure,
+      p_min_down_payment_percent: settings.min_down_payment_percent,
+      p_max_ltv: settings.max_ltv,
+    });
     setSaving(false);
     if (error) toast.error('Failed to save mortgage settings: ' + error.message);
     else toast.success('Mortgage settings saved successfully!');
