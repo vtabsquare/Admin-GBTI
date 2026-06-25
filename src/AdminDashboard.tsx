@@ -406,7 +406,7 @@ const LeadsTab = ({ leads, onRefresh }: { leads: Lead[]; onRefresh: () => Promis
     else { toast.success('Lead deleted'); await onRefresh(); setSelected((p) => { const n = new Set(p); n.delete(id); return n; }); }
   };
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     const toExport = selected.size > 0 ? leads.filter((l) => selected.has(l.id)) : filtered;
     const rows = toExport.map((l) => ({
       Name: l.name, Email: l.email, Phone: l.phone, Timeline: l.timeline || '',
