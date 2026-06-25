@@ -69,9 +69,12 @@ export default function FinancingTab() {
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.schema('api').rpc('admin_get_mortgage_settings', { p_token: sessionToken });
-    if (!error && data) {
-      setSettings(data as MortgageSettings);
+    const { data: result, error } = await supabase.functions.invoke('admin-api', {
+      body: { action: 'get_mortgage_settings' },
+      headers: { 'x-session-token': sessionToken },
+    });
+    if (!error && result?.data) {
+      setSettings(result.data as MortgageSettings);
     }
     setLoading(false);
   }, [sessionToken]);
@@ -85,17 +88,22 @@ export default function FinancingTab() {
     if (!verified) return;
 
     setSaving(true);
-    const { error } = await supabase.schema('api').rpc('admin_upsert_mortgage_settings', {
-      p_token: sessionToken,
-      p_id: settings.id || null,
-      p_default_interest_rate: settings.default_interest_rate,
-      p_min_interest_rate: settings.min_interest_rate,
-      p_max_interest_rate: settings.max_interest_rate,
-      p_default_tenure: settings.default_tenure,
-      p_min_tenure: settings.min_tenure,
-      p_max_tenure: settings.max_tenure,
-      p_min_down_payment_percent: settings.min_down_payment_percent,
-      p_max_ltv: settings.max_ltv,
+    const { error } = await supabase.functions.invoke('admin-api', {
+      body: {
+        action: 'upsert_mortgage_settings',
+        payload: {
+          id: settings.id || null,
+          default_interest_rate: settings.default_interest_rate,
+          min_interest_rate: settings.min_interest_rate,
+          max_interest_rate: settings.max_interest_rate,
+          default_tenure: settings.default_tenure,
+          min_tenure: settings.min_tenure,
+          max_tenure: settings.max_tenure,
+          min_down_payment_percent: settings.min_down_payment_percent,
+          max_ltv: settings.max_ltv,
+        }
+      },
+      headers: { 'x-session-token': sessionToken },
     });
     setSaving(false);
     if (error) toast.error('Failed to save mortgage settings: ' + error.message);

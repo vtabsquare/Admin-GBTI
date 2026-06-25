@@ -78,9 +78,12 @@ export default function FeesTab() {
 
   const fetchFees = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.schema('api').rpc('admin_get_fee_rules', { p_token: sessionToken });
-    if (!error && data) {
-      setFees(data as FeeRules);
+    const { data: result, error } = await supabase.functions.invoke('admin-api', {
+      body: { action: 'get_fee_rules' },
+      headers: { 'x-session-token': sessionToken },
+    });
+    if (!error && result?.data) {
+      setFees(result.data as FeeRules);
     }
     setLoading(false);
   }, [sessionToken]);
@@ -94,15 +97,21 @@ export default function FeesTab() {
     if (!verified) return;
 
     setSaving(true);
-    const { error } = await supabase.schema('api').rpc('admin_update_fee_rules', {
-      p_token: sessionToken,
-      p_solicitor: fees.solicitor_fee_percent,
-      p_solicitor_fixed: fees.solicitor_fixed_charge,
-      p_registry: fees.registry_fee_percent,
-      p_stamp: fees.stamp_duty_percent,
-      p_misc: fees.misc_fee,
-      p_vat_enabled: fees.vat_enabled,
-      p_vat_percent: fees.vat_percent,
+    const { error } = await supabase.functions.invoke('admin-api', {
+      body: {
+        action: 'update_fee_rules',
+        payload: {
+          p_token: sessionToken,
+          p_solicitor: fees.solicitor_fee_percent,
+          p_solicitor_fixed: fees.solicitor_fixed_charge,
+          p_registry: fees.registry_fee_percent,
+          p_stamp: fees.stamp_duty_percent,
+          p_misc: fees.misc_fee,
+          p_vat_enabled: fees.vat_enabled,
+          p_vat_percent: fees.vat_percent,
+        }
+      },
+      headers: { 'x-session-token': sessionToken },
     });
     setSaving(false);
     if (error) toast.error('Failed to save fees: ' + error.message);

@@ -36,7 +36,7 @@ const LoginPage = () => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.schema('api').rpc('send_admin_login_otp', {
+      const { data, error } = await supabase.rpc('send_admin_login_otp', {
         p_email: email.trim(),
       });
 
@@ -102,7 +102,7 @@ const LoginPage = () => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.schema('api').rpc('verify_admin_login_otp', {
+      const { data, error } = await supabase.rpc('verify_admin_login_otp', {
         p_email: email.trim(),
         p_otp: otp.trim(),
       });

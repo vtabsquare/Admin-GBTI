@@ -4,7 +4,7 @@ import AdminDashboard from '@/AdminDashboard';
 import { motion } from 'framer-motion';
 
 const AppRoot = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, sessionToken } = useAuth();
 
   // Loading spinner while restoring session
   if (loading) {
@@ -20,7 +20,7 @@ const AppRoot = () => {
   }
 
   // Not authenticated → show OTP login
-  if (!user) {
+  if (!user || !sessionToken) {
     return <LoginPage />;
   }
 

@@ -8,7 +8,8 @@ import {
   TrendingUp, Calendar, Eye, RefreshCw, ExternalLink, LogOut, UserCog,
   CreditCard, Landmark
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 import { useAuth } from '@/auth/AuthContext';
 import { useReauth } from '@/hooks/useReauth';
 import UsersTab from '@/auth/UsersTab';
@@ -147,18 +148,31 @@ const AdminDashboard = () => {
   const [pricing, setPricing] = useState<PricingConfig>(DEFAULT_PRICING);
 
   const fetchLeads = useCallback(async () => {
-    const { data, error } = await supabase.schema('api').rpc('admin_get_leads', { p_token: sessionToken });
-    if (!error && data) setLeads((data as Lead[]) || []);
-    else if (error) toast.error('Failed to load leads');
-  }, [sessionToken]);
+    if (!sessionToken) return;
+    const { data: result, error } = await supabase.functions.invoke('admin-api', {
+      body: { action: 'get_leads' },
+      headers: { 'x-session-token': sessionToken },
+    });
+    if (!error && result?.data) setLeads((result.data as Lead[]) || []);
+    else if (error) {
+      if (error.message?.includes('Unauthorized')) logout();
+      toast.error('Failed to load leads');
+    }
+  }, [logout, sessionToken]);
 
   const fetchPricing = useCallback(async () => {
-    const { data, error } = await supabase.schema('api').rpc('admin_get_settings', { p_token: sessionToken });
-    if (!error && data) {
-      const pricingRow = (data as { key: string; value: any }[])?.find((s) => s.key === 'pricing');
+    if (!sessionToken) return;
+    const { data: result, error } = await supabase.functions.invoke('admin-api', {
+      body: { action: 'get_admin_settings' },
+      headers: { 'x-session-token': sessionToken },
+    });
+    if (!error && result?.data) {
+      const pricingRow = (result.data as { key: string; value: any }[])?.find((s) => s.key === 'pricing');
       if (pricingRow?.value) setPricing({ ...DEFAULT_PRICING, ...(pricingRow.value as any) });
+    } else if (error?.message?.includes('Unauthorized')) {
+      logout();
     }
-  }, [sessionToken]);
+  }, [logout, sessionToken]);
 
   useEffect(() => {
     const loadAll = async () => {
@@ -384,7 +398,10 @@ const LeadsTab = ({ leads, onRefresh }: { leads: Lead[]; onRefresh: () => Promis
   const { sessionToken: leadsSessionToken } = useAuth();
   const deleteLead = async (id: string) => {
     if (!confirm('Delete this lead permanently?')) return;
-    const { error } = await supabase.schema('api').rpc('admin_delete_lead', { p_token: leadsSessionToken, p_lead_id: id });
+    const { error } = await supabase.functions.invoke('admin-api', {
+      body: { action: 'delete_lead', payload: { id } },
+      headers: { 'x-session-token': leadsSessionToken },
+    });
     if (error) toast.error('Failed to delete');
     else { toast.success('Lead deleted'); await onRefresh(); setSelected((p) => { const n = new Set(p); n.delete(id); return n; }); }
   };
@@ -397,12 +414,18 @@ const LeadsTab = ({ leads, onRefresh }: { leads: Lead[]; onRefresh: () => Promis
       Kitchen: l.config?.kitchen || '', 'Finishing': l.config?.finishing_quality === 'premium' ? 'Premium' : 'Standard', 'Add-ons': (l.config?.addons || []).join(', '),
       'Total Cost': l.total_cost || 0, 'Created At': new Date(l.created_at).toLocaleString(),
     }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Leads');
-    const colWidths = Object.keys(rows[0] || {}).map((key) => ({ wch: Math.max(key.length, ...rows.map((r) => String((r as any)[key]).length)) + 2 }));
-    ws['!cols'] = colWidths;
-    XLSX.writeFile(wb, `GBTI_Leads_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Leads');
+    if (rows.length > 0) {
+      ws.columns = Object.keys(rows[0]).map(key => ({
+        header: key,
+        key: key,
+        width: Math.max(key.length, ...rows.map((r: any) => String(r[key]).length)) + 2
+      }));
+      rows.forEach(row => ws.addRow(row));
+    }
+    const buffer = await wb.xlsx.writeBuffer();
+    saveAs(new Blob([buffer]), `GBTI_Leads_${new Date().toISOString().slice(0, 10)}.xlsx`);
     toast.success(`Exported ${rows.length} leads to Excel`);
   };
 
@@ -537,7 +560,10 @@ const PricingTab = ({ pricing, onSave }: { pricing: PricingConfig; onSave: (p: P
   const { sessionToken: pricingSessionToken } = useAuth();
   const save = async () => {
     setSaving(true);
-    const { error } = await supabase.schema('api').rpc('admin_upsert_settings', { p_token: pricingSessionToken, p_key: 'pricing', p_value: local as any });
+    const { error } = await supabase.functions.invoke('admin-api', {
+      body: { action: 'upsert_admin_settings', payload: { key: 'pricing', value: local } },
+      headers: { 'x-session-token': pricingSessionToken },
+    });
     if (error) toast.error('Failed to save pricing');
     else { toast.success('Pricing saved! Main app will reflect changes on next load.'); onSave(local); }
     setSaving(false);
