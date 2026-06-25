@@ -155,8 +155,8 @@ const AdminDashboard = () => {
     });
     if (!error && result?.data) setLeads((result.data as Lead[]) || []);
     else if (error) {
-      if (error.message?.includes('Unauthorized')) logout();
-      toast.error('Failed to load leads');
+      if (error.message?.includes('Unauthorized') || (error as any).context?.status === 401) logout();
+      else toast.error('Failed to load leads');
     }
   }, [logout, sessionToken]);
 
@@ -169,7 +169,7 @@ const AdminDashboard = () => {
     if (!error && result?.data) {
       const pricingRow = (result.data as { key: string; value: any }[])?.find((s) => s.key === 'pricing');
       if (pricingRow?.value) setPricing({ ...DEFAULT_PRICING, ...(pricingRow.value as any) });
-    } else if (error?.message?.includes('Unauthorized')) {
+    } else if (error?.message?.includes('Unauthorized') || (error as any)?.context?.status === 401) {
       logout();
     }
   }, [logout, sessionToken]);
