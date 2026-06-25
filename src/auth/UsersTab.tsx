@@ -20,7 +20,7 @@ interface AdminUserRow {
 
 
 const UsersTab = () => {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, sessionToken } = useAuth();
   const { requireReauth, ReauthModal } = useReauth();
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,14 +31,17 @@ const UsersTab = () => {
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.rpc('list_admin_users');
-    if (!error && data) {
-      setUsers(Array.isArray(data) ? data : []);
-    } else if (error) {
+    const { data: result, error } = await supabase.functions.invoke('admin-api', {
+      body: { action: 'list_admin_users' },
+      headers: { 'x-session-token': sessionToken || '' },
+    });
+    if (!error && result?.data) {
+      setUsers(Array.isArray(result.data) ? result.data : []);
+    } else if (error || result?.error) {
       toast.error('Failed to load users');
     }
     setLoading(false);
-  }, []);
+  }, [currentUser?.sessionToken]);
 
   useEffect(() => {
     fetchUsers();
@@ -100,17 +103,24 @@ const UsersTab = () => {
     setAdding(true);
 
     try {
-      const { data, error } = await supabase.rpc('create_admin_user', {
-        p_email: newEmail.trim(),
-        p_display_name: newDisplayName.trim() || newEmail.trim().split('@')[0],
+      const { data: result, error } = await supabase.functions.invoke('admin-api', {
+        body: {
+          action: 'create_admin_user',
+          payload: {
+            email: newEmail.trim(),
+            display_name: newDisplayName.trim() || newEmail.trim().split('@')[0],
+          },
+        },
+        headers: { 'x-session-token': sessionToken || '' },
       });
 
-      if (error) {
-        toast.error(error.message || 'Failed to create user');
+      if (error || result?.error) {
+        toast.error(result?.error || 'Failed to create user');
         setAdding(false);
         return;
       }
 
+      const data = result?.data;
       if (data) {
         await sendWelcomeEmail(data.email, data.display_name);
         toast.success(`User created! Welcome email sent to ${data.email}`);
@@ -136,7 +146,10 @@ const UsersTab = () => {
     const verified = await requireReauth();
     if (!verified) return;
 
-    const { error } = await supabase.rpc('delete_admin_user', { p_user_id: userId });
+    const { error } = await supabase.functions.invoke('admin-api', {
+      body: { action: 'delete_admin_user', payload: { user_id: userId } },
+      headers: { 'x-session-token': sessionToken || '' },
+    });
     if (error) {
       toast.error('Failed to delete user');
     } else {

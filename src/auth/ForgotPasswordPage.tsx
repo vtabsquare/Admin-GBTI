@@ -32,15 +32,17 @@ const ForgotPasswordPage = ({ onBack }: ForgotPasswordPageProps) => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('set_admin_reset_code', {
-        p_email: email.trim(),
+      const { data: result, error } = await supabase.functions.invoke('admin-api', {
+        body: { action: 'set_admin_reset_code', payload: { email: email.trim() } },
       });
 
-      if (error) {
-        toast.error('Failed to send reset code: ' + error.message);
+      if (error || result?.error) {
+        toast.error('Failed to send reset code: ' + (result?.error || error?.message));
         setLoading(false);
         return;
       }
+
+      const data = result?.data;
 
       if (!data) {
         // Don't reveal if email exists or not for security
@@ -109,18 +111,20 @@ const ForgotPasswordPage = ({ onBack }: ForgotPasswordPageProps) => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('verify_admin_reset_code', {
-        p_email: email.trim(),
-        p_code: code.trim(),
-        p_new_password: newPassword,
+      const { data: result, error } = await supabase.functions.invoke('admin-api', {
+        body: {
+          action: 'verify_admin_reset_code',
+          payload: { email: email.trim(), code: code.trim(), new_password: newPassword },
+        },
       });
 
-      if (error) {
-        toast.error('Reset failed: ' + error.message);
+      if (error || result?.error) {
+        toast.error('Reset failed: ' + (result?.error || error?.message));
         setLoading(false);
         return;
       }
 
+      const data = result?.data;
       if (data) {
         toast.success('Password reset successfully! Please sign in.');
         onBack();

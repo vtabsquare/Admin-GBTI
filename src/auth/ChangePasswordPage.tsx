@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { ShieldCheck, Lock, Eye, EyeOff } from 'lucide-react';
 
 const ChangePasswordPage = () => {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, sessionToken } = useAuth();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNew, setShowNew] = useState(false);
@@ -28,17 +28,21 @@ const ChangePasswordPage = () => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('change_admin_password', {
-        p_user_id: user.id,
-        p_new_password: newPassword,
+      const { data: result, error } = await supabase.functions.invoke('admin-api', {
+        body: {
+          action: 'change_admin_password',
+          payload: { user_id: user.id, new_password: newPassword },
+        },
+        headers: { 'x-session-token': sessionToken || '' },
       });
 
-      if (error) {
-        toast.error('Failed to change password: ' + error.message);
+      if (error || result?.error) {
+        toast.error('Failed to change password: ' + (result?.error || error?.message));
         setLoading(false);
         return;
       }
 
+      const data = result?.data;
       if (data) {
         updateUser({ must_change_password: false });
         toast.success('Password changed successfully!');

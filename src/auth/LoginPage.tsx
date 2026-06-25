@@ -36,15 +36,17 @@ const LoginPage = () => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('send_admin_login_otp', {
-        p_email: email.trim(),
+      const { data: result, error } = await supabase.functions.invoke('admin-api', {
+        body: { action: 'send_admin_login_otp', payload: { email: email.trim() } },
       });
 
-      if (error) {
-        toast.error('Failed to send OTP: ' + error.message);
+      if (error || result?.error) {
+        toast.error('Failed to send OTP: ' + (result?.error || error?.message));
         setLoading(false);
         return;
       }
+
+      const data = result?.data;
 
       if (!data) {
         toast.error('This email is not registered as an admin');
@@ -102,16 +104,17 @@ const LoginPage = () => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('verify_admin_login_otp', {
-        p_email: email.trim(),
-        p_otp: otp.trim(),
+      const { data: result, error } = await supabase.functions.invoke('admin-api', {
+        body: { action: 'verify_admin_login_otp', payload: { email: email.trim(), otp: otp.trim() } },
       });
 
-      if (error) {
-        toast.error('Verification failed: ' + error.message);
+      if (error || result?.error) {
+        toast.error('Verification failed: ' + (result?.error || error?.message));
         setLoading(false);
         return;
       }
+
+      const data = result?.data;
 
       if (!data) {
         toast.error('Invalid or expired OTP. Please try again.');
