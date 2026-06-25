@@ -4,14 +4,11 @@ import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { LogIn, Mail, Send, ArrowLeft, ShieldCheck } from 'lucide-react';
-
-const INFOBIP_API_KEY = import.meta.env.VITE_INFOBIP_API_KEY;
-const INFOBIP_BASE_URL = import.meta.env.VITE_INFOBIP_BASE_URL;
-const INFOBIP_SENDER_EMAIL = import.meta.env.VITE_INFOBIP_SENDER_EMAIL;
-const INFOBIP_SENDER_NAME = import.meta.env.VITE_INFOBIP_SENDER_NAME || 'GBTI Architectural Team';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 
 const LoginPage = () => {
   const { login } = useAuth();
+  const { executeRecaptcha } = useGoogleReCaptcha();
   const [step, setStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -29,62 +26,39 @@ const LoginPage = () => {
 
   const sendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) {
-      toast.error('Please enter your email address');
+    if (!email.trim() || !email.includes('@')) {
+      toast.error('Please enter a valid email address');
       return;
     }
 
     setLoading(true);
     try {
-      const { data: result, error } = await supabase.functions.invoke('admin-api', {
-        body: { action: 'send_admin_login_otp', payload: { email: email.trim() } },
+      const captchaToken = executeRecaptcha ? await executeRecaptcha('admin_otp') : null;
+      if (!captchaToken) {
+        toast.error('CAPTCHA verification failed. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      // Send OTP via edge function (this generates and sends the email)
+      const { data, error: invokeError } = await supabase.functions.invoke('captcha-otp', {
+        body: { action: 'send_admin_otp', email: email.trim(), captchaToken }
       });
-
-      if (error || result?.error) {
-        toast.error('Failed to send OTP: ' + (result?.error || error?.message));
-        setLoading(false);
-        return;
-      }
-
-      const data = result?.data;
-
-      if (!data) {
-        toast.error('This email is not registered as an admin');
-        setLoading(false);
-        return;
-      }
-
-      // Send OTP via Infobip
-      if (INFOBIP_API_KEY && INFOBIP_BASE_URL && INFOBIP_SENDER_EMAIL) {
-        try {
-          const form = new FormData();
-          form.append('from', `${INFOBIP_SENDER_NAME} <${INFOBIP_SENDER_EMAIL}>`);
-          form.append('to', email.trim());
-          form.append('subject', 'GBTI Admin — Login OTP');
-          form.append('html', `
-            <div style="font-family:Arial,sans-serif;color:#111;line-height:1.6;max-width:560px;margin:0 auto;padding:32px;">
-              <div style="text-align:center;margin-bottom:24px;">
-                <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#b8956a,#a07850);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:20px;">G</div>
-              </div>
-              <h2 style="text-align:center;margin:0 0 8px;color:#111;font-size:20px;">Admin Login OTP</h2>
-              <p style="text-align:center;color:#6b7280;margin:0 0 24px;font-size:14px;">Use the code below to sign in to your GBTI Admin Panel</p>
-              <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:20px;text-align:center;margin:0 0 24px;">
-                <span style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#111;">${data}</span>
-              </div>
-              <p style="text-align:center;color:#9ca3af;font-size:12px;margin:0;">This code expires in 10 minutes. If you did not request this, please ignore this email.</p>
-              <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;"/>
-              <p style="text-align:center;font-size:11px;color:#9ca3af;">GBTI Architectural Team</p>
-            </div>
-          `);
-          form.append('text', `Your GBTI Admin login OTP is: ${data}\n\nThis code expires in 10 minutes.\nIf you did not request this, please ignore this email.\n\n-- GBTI Architectural Team`);
-          await fetch(`${INFOBIP_BASE_URL}/email/3/send`, {
-            method: 'POST',
-            headers: { Authorization: `App ${INFOBIP_API_KEY}` },
-            body: form,
-          });
-        } catch {
-          console.error('Infobip email send failed');
+      
+      if (invokeError || data?.error) {
+        const errorMsg = invokeError?.message || data?.error;
+        if (errorMsg === 'RATE_LIMITED') {
+          toast.error('Too many requests. Please try again later.');
+        } else if (errorMsg === 'LOCKED') {
+          toast.error('Account temporarily locked due to too many failed attempts');
+        } else if (errorMsg === 'NOT_FOUND') {
+          toast.error('This email is not registered as an admin');
+        } else {
+          toast.error(`Failed to send OTP: ${errorMsg}`);
+          console.error("OTP Error Payload:", errorMsg);
         }
+        setLoading(false);
+        return;
       }
 
       toast.success('OTP sent! Check your email.');

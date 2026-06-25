@@ -6,11 +6,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { UserPlus, Trash2, X, Send, RefreshCw, Users, Mail, User } from 'lucide-react';
 import { useReauth } from '@/hooks/useReauth';
 
-const INFOBIP_API_KEY = import.meta.env.VITE_INFOBIP_API_KEY;
-const INFOBIP_BASE_URL = import.meta.env.VITE_INFOBIP_BASE_URL;
-const INFOBIP_SENDER_EMAIL = import.meta.env.VITE_INFOBIP_SENDER_EMAIL;
-const INFOBIP_SENDER_NAME = import.meta.env.VITE_INFOBIP_SENDER_NAME || 'GBTI Architectural Team';
-
 interface AdminUserRow {
   id: string;
   email: string;
@@ -48,45 +43,14 @@ const UsersTab = () => {
   }, [fetchUsers]);
 
   const sendWelcomeEmail = async (email: string, displayName: string) => {
-    if (!INFOBIP_API_KEY || !INFOBIP_BASE_URL || !INFOBIP_SENDER_EMAIL) {
-      toast.warning('Email service is not configured — welcome email could not be sent.');
-      return;
-    }
-
     const adminUrl = window.location.origin;
 
     try {
-      const form = new FormData();
-      form.append('from', `${INFOBIP_SENDER_NAME} <${INFOBIP_SENDER_EMAIL}>`);
-      form.append('to', `${displayName} <${email}>`);
-      form.append('subject', 'Your GBTI Admin Panel Account');
-      form.append('html', `
-        <div style="font-family:Arial,sans-serif;color:#111;line-height:1.6;max-width:560px;margin:0 auto;padding:32px;">
-          <div style="text-align:center;margin-bottom:24px;">
-            <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#b8956a,#a07850);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:20px;">G</div>
-          </div>
-          <h2 style="text-align:center;margin:0 0 8px;color:#111;font-size:20px;">Welcome to GBTI Admin</h2>
-          <p style="text-align:center;color:#6b7280;margin:0 0 24px;font-size:14px;">An admin account has been created for you</p>
-          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:20px;text-align:center;margin:0 0 24px;">
-            <p style="margin:0 0 8px;color:#6b7280;font-size:13px;">Your login email</p>
-            <p style="margin:0;font-weight:700;font-size:16px;color:#111;">${email}</p>
-          </div>
-          <p style="text-align:center;color:#6b7280;font-size:13px;margin:0 0 16px;">To sign in, visit the Admin Panel and enter your email. A one-time login code (OTP) will be sent to this email address each time you log in.</p>
-          <div style="text-align:center;margin:0 0 24px;">
-            <a href="${adminUrl}" style="display:inline-block;background:linear-gradient(135deg,#b8956a,#a07850);color:#fff;text-decoration:none;padding:12px 32px;border-radius:10px;font-weight:600;font-size:14px;">Open Admin Panel</a>
-          </div>
-          <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;"/>
-          <p style="text-align:center;font-size:11px;color:#9ca3af;">GBTI Architectural Team</p>
-        </div>
-      `);
-      form.append('text', `Welcome to GBTI Admin!\n\nAn admin account has been created for you.\n\nYour login email: ${email}\n\nTo sign in, visit ${adminUrl} and enter your email. A one-time login code (OTP) will be sent each time you log in.\n\n-- GBTI Architectural Team`);
-      const res = await fetch(`${INFOBIP_BASE_URL}/email/3/send`, {
-        method: 'POST',
-        headers: { Authorization: `App ${INFOBIP_API_KEY}` },
-        body: form,
+      const { error } = await supabase.functions.invoke('email-api', {
+        body: { action: 'send_admin_welcome', toEmail: email.trim(), adminUrl }
       });
-
-      if (!res.ok) {
+      
+      if (error) {
         toast.warning('Welcome email could not be sent.');
       }
     } catch {

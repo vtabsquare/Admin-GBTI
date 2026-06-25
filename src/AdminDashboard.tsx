@@ -127,11 +127,6 @@ const DEFAULT_PRICING: PricingConfig = {
 
 type Tab = 'dashboard' | 'leads' | 'pricing' | 'financing' | 'fees' | 'users';
 
-const INFOBIP_API_KEY = import.meta.env.VITE_INFOBIP_API_KEY;
-const INFOBIP_BASE_URL = import.meta.env.VITE_INFOBIP_BASE_URL;
-const INFOBIP_SENDER_EMAIL = import.meta.env.VITE_INFOBIP_SENDER_EMAIL;
-const INFOBIP_SENDER_NAME = import.meta.env.VITE_INFOBIP_SENDER_NAME || 'GBTI Loans Team';
-
 function formatMoney(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 }
@@ -431,7 +426,7 @@ const LeadsTab = ({ leads, onRefresh }: { leads: Lead[]; onRefresh: () => Promis
 
   const sendBulkEmail = async () => {
     if (!emailSubject.trim() || !emailBody.trim()) { toast.error('Please fill in subject and body'); return; }
-    if (!INFOBIP_API_KEY || !INFOBIP_BASE_URL || !INFOBIP_SENDER_EMAIL) { toast.error('Email service is not configured'); return; }
+    if (!sessionToken) { toast.error('Not authorized to send emails'); return; }
     const selectedLeads = leads.filter((l) => selected.has(l.id));
     if (selectedLeads.length === 0) { toast.error('No leads selected'); return; }
 
@@ -439,18 +434,20 @@ const LeadsTab = ({ leads, onRefresh }: { leads: Lead[]; onRefresh: () => Promis
     let sent = 0, failed = 0;
     for (const lead of selectedLeads) {
       try {
-        const form = new FormData();
-        form.append('from', `${INFOBIP_SENDER_NAME} <${INFOBIP_SENDER_EMAIL}>`);
-        form.append('to', `${lead.name} <${lead.email}>`);
-        form.append('subject', emailSubject);
-        form.append('html', `<div style="font-family:Arial,sans-serif;color:#111;line-height:1.6;max-width:640px;margin:0 auto;padding:24px;"><p>Hi ${lead.name},</p><div style="margin:16px 0;white-space:pre-wrap;">${emailBody.replace(/\n/g, '<br/>')}</div><hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;"/><p style="font-size:12px;color:#9ca3af;">Sent by GBTI Loans Team</p></div>`);
-        form.append('text', `Hi ${lead.name},\n\n${emailBody}\n\n--\nGBTI Loans Team`);
-        const res = await fetch(`${INFOBIP_BASE_URL}/email/3/send`, {
-          method: 'POST',
-          headers: { Authorization: `App ${INFOBIP_API_KEY}` },
-          body: form,
+        const { error } = await supabase.functions.invoke('email-api', {
+          body: {
+            action: 'send_admin_bulk_email',
+            toName: lead.name,
+            toEmail: lead.email,
+            subject: emailSubject,
+            html: `<div style="font-family:Arial,sans-serif;color:#111;line-height:1.6;max-width:640px;margin:0 auto;padding:24px;"><p>Hi ${lead.name},</p><div style="margin:16px 0;white-space:pre-wrap;">${emailBody.replace(/\n/g, '<br/>')}</div><hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;"/><p style="font-size:12px;color:#9ca3af;">Sent by GBTI Loans Team</p></div>`,
+            text: `Hi ${lead.name},\n\n${emailBody}\n\n--\nGBTI Loans Team`
+          },
+          headers: {
+            'x-session-token': sessionToken
+          }
         });
-        if (res.ok) sent++; else failed++;
+        if (!error) sent++; else failed++;
       } catch { failed++; }
     }
     setSendingEmail(false); setShowEmailModal(false); setEmailSubject(''); setEmailBody('');
